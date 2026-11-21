@@ -1,0 +1,369 @@
+:root {
+  font-family: Inter, Arial, sans-serif;
+  color: #242525;
+  background: #f5f3ec;
+  --red: #c93626;
+  --rule: #cbc8bc;
+  --mono: "IBM Plex Mono", monospace;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+header,
+footer,
+main {
+  max-width: 900px;
+  margin: auto;
+}
+header,
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+header {
+  height: 76px;
+  border-bottom: 2px solid #242525;
+}
+.network {
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.network i {
+  background: var(--red);
+  color: white;
+  padding: 1px 6px;
+  font-style: normal;
+  margin-right: 5px;
+}
+.network b {
+  border: 1px solid;
+  padding: 1px 3px;
+  font: 700 11px var(--mono);
+}
+.feed,
+.eyebrow,
+small,
+figcaption,
+footer,
+.stageinfo {
+  font: 700 11px var(--mono);
+  letter-spacing: 1px;
+}
+.feed {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.feed em {
+  width: 8px;
+  height: 8px;
+  background: #888;
+  border-radius: 50%;
+}
+body.online .feed em {
+  background: var(--red);
+}
+main {
+  padding: 38px 0 20px;
+}
+.hero {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  align-items: center;
+  gap: 28px;
+  margin-bottom: 28px;
+}
+.eyebrow {
+  color: var(--red);
+  margin-bottom: 14px;
+}
+.eyebrow:before {
+  content: "";
+  width: 21px;
+  height: 3px;
+  background: currentColor;
+  display: inline-block;
+  margin: 0 8px 3px 0;
+}
+h1,
+h2,
+p,
+figure {
+  margin: 0;
+}
+h1 {
+  font-size: clamp(48px, 7vw, 87px);
+  line-height: 0.91;
+  letter-spacing: -0.075em;
+  font-weight: 800;
+}
+h1 strong {
+  font-weight: inherit;
+}
+h1 span {
+  color: var(--red);
+}
+.intro p,
+.ticket p,
+details p {
+  line-height: 1.45;
+  color: #54534d;
+}
+.intro p {
+  margin-top: 18px;
+  max-width: 320px;
+}
+.plate {
+  background-color: #eae7dd;
+  background-image:
+    linear-gradient(#d7d4c8 1px, transparent 1px),
+    linear-gradient(90deg, #d7d4c8 1px, transparent 1px);
+  background-size: 16px 16px;
+  border: 1px solid var(--rule);
+  display: grid;
+  place-items: center;
+}
+.plate canvas {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+figcaption {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--rule);
+  padding: 8px 0;
+  font-size: 9px;
+}
+.ticket {
+  background: #fffdf6;
+  border: 1px solid var(--rule);
+  border-top: 3px solid #242525;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+.tickethead,
+.account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+h2 {
+  font-size: 26px;
+  letter-spacing: -1.5px;
+}
+.ticket p {
+  margin: 7px 0 16px;
+}
+.buttons,
+.controls {
+  display: flex;
+  gap: 12px;
+}
+.buttons button {
+  flex: 1;
+  text-align: left;
+  font-size: 17px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+}
+.buttons i {
+  font: 26px var(--mono);
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: #fffdf6;
+  border: 1px solid #242525;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+button:hover:enabled {
+  filter: brightness(0.94);
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.56;
+}
+#up {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+}
+#down {
+  background: #252826;
+  color: white;
+}
+.account {
+  border-top: 1px dashed var(--rule);
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.account b {
+  display: block;
+  font-size: 24px;
+  margin-top: 3px;
+}
+.account button {
+  font-size: 13px;
+}
+.ticket #receipt:empty,
+#error:empty {
+  display: none;
+}
+details {
+  font-size: 14px;
+}
+summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+details p {
+  max-width: 60ch;
+}
+footer {
+  border-top: 1px solid var(--rule);
+  padding: 18px 0;
+  font-size: 9px;
+  color: #66645a;
+}
+footer span {
+  color: var(--red);
+}
+form {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  margin-top: 15px;
+}
+label {
+  font: 600 12px var(--mono);
+  flex: 1;
+}
+input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px;
+  background: #fffdf6;
+  border: 1px solid #929185;
+  font: inherit;
+}
+.controls {
+  flex-wrap: wrap;
+}
+body:not([data-view="audience"]) h1 {
+  margin: 12px 0 26px;
+}
+.board {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  background: #211e1a;
+  color: #ff705b;
+  text-align: center;
+  font: 700 clamp(18px, 4vw, 52px) var(--mono);
+}
+.board > div {
+  min-width: 0;
+}
+.board > div > * {
+  font: inherit;
+  border-bottom: 1px solid #684632;
+  padding: 0.55em 0.15em;
+  overflow-wrap: anywhere;
+}
+.board aside {
+  writing-mode: vertical-rl;
+  background: #392824;
+  overflow-wrap: anywhere;
+  padding: 0.2em;
+}
+.stageinfo {
+  margin: 18px 0;
+}
+.stageinfo b,
+#mark {
+  font-size: 26px;
+}
+#error {
+  color: #a52c22;
+}
+a {
+  color: var(--red);
+}
+@media (max-width: 960px) {
+  body {
+    padding: 0 5vw;
+  }
+}
+@media (max-width: 600px) {
+  header {
+    height: 55px;
+  }
+  main {
+    padding-top: 22px;
+  }
+  .hero {
+    grid-template-columns: 1.1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .intro p {
+    font-size: 13px;
+    margin-top: 12px;
+  }
+  .plate canvas {
+    width: 100%;
+  }
+  figcaption {
+    font-size: 7px;
+    letter-spacing: 0;
+    gap: 4px;
+  }
+  .eyebrow,
+  small,
+  .feed {
+    font-size: 9px;
+  }
+  .ticket {
+    padding: 17px;
+  }
+  .tickethead {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .buttons button {
+    padding: 11px 16px;
+  }
+  .ticket p {
+    font-size: 14px;
+  }
+  .network {
+    font-size: 16px;
+  }
+  .account {
+    margin-top: 14px;
+  }
+  .controls button {
+    font-size: 14px;
+  }
+  .board {
+    font-size: 15px;
+  }
+}

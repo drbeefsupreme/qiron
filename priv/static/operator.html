@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Operator booth · Too Late TV</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script defer src="/app.js"></script>
+    <script defer src="/specimen.js"></script>
+  </head>
+  <body data-view="operator">
+    <header>
+      <div class="network"><i aria-hidden="true">▥</i> TOO LATE <b>TV</b></div>
+      <div class="feed"><em></em> <span id="signal">CONNECTING</span></div>
+    </header>
+    <main>
+      <div class="eyebrow">DOCTOR BEEF SUPREME</div>
+      <h1>Operator booth<span>.</span></h1>
+      <section class="ticket">
+        <div class="tickethead">
+          <h2>Oracle mark</h2>
+          <b id="mark">…</b>
+        </div>
+        <p id="marketmeta"></p>
+        <div class="controls">
+          <button data-nudge="-1">Lower 5%</button
+          ><button data-nudge="1">Raise 5%</button
+          ><button id="hold" disabled>Hold drift</button>
+        </div>
+        <form id="setmark">
+          <label
+            >Set mark
+            <input
+              type="number"
+              id="price"
+              min="1"
+              max="10000"
+              step=".01"
+              required /></label
+          ><button>Set price</button>
+        </form>
+      </section>
+      <section class="ticket">
+        <h2>Chyron layers</h2>
+        <p>
+          Save a line to override its feed. Save an empty line to restore the
+          feed.
+        </p>
+        <div id="layers"></div>
+      </section>
+      <p id="receipt" role="status"></p>
+      <a href="/stage">Open stage display ↗</a>
+      <p id="error" role="alert"></p>
+    </main>
+    <footer>TOO LATE SHOW <span>◆</span> CROWNET TERMINAL</footer>
+  </body>
+</html>

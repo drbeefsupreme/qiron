@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blood Futures · Too Late TV</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script defer src="/app.js"></script>
+    <script defer src="/specimen.js"></script>
+  </head>
+  <body data-view="audience">
+    <header>
+      <div class="network"><i aria-hidden="true">▥</i> TOO LATE <b>TV</b></div>
+      <div class="feed"><em></em> <span id="signal">CONNECTING</span></div>
+    </header>
+    <main>
+      <section class="hero">
+        <div class="intro">
+          <div class="eyebrow">AUDIENCE EXCHANGE</div>
+          <h1>
+            Blood<br /><strong>Futures<span>.</span></strong>
+          </h1>
+          <p>Trade the value of the blood of Dr. Crow’s unborn child.</p>
+        </div>
+        <figure>
+          <div class="plate">
+            <canvas
+              id="specimen"
+              width="260"
+              height="170"
+              aria-label="Pixel illustration of a blood droplet"
+            ></canvas>
+          </div>
+          <figcaption><span>FIG. 01</span> CROW BLOOD SPECIMEN</figcaption>
+        </figure>
+      </section>
+      <section class="ticket">
+        <div class="tickethead">
+          <h2>Call the market</h2>
+          <small id="side">YOUR POSITION · …</small>
+        </div>
+        <p>Pick a direction. Watch the Chyron for the price.</p>
+        <div class="buttons">
+          <button id="up" disabled><i>↗</i> I think it will go up</button
+          ><button id="down" disabled><i>↘</i> I think it will go down</button>
+        </div>
+        <p role="status" id="receipt"></p>
+        <div class="account">
+          <div><small>YOUR CREDITS</small><b id="credits">…</b></div>
+          <button id="close" hidden>Close position</button>
+        </div>
+      </section>
+      <details>
+        <summary>How the trade works</summary>
+        <p>
+          You start with 1,000 play credits. Each call puts up to 100 at stake.
+          A 10% move in your direction earns 10 credits on a 100-credit stake.
+          Change direction or close to bank the result. If the stake runs out,
+          the position closes.
+        </p>
+      </details>
+      <p id="error" role="alert"></p>
+    </main>
+    <footer>TOO LATE SHOW <span>◆</span> CROWNET TERMINAL</footer>
+  </body>
+</html>
