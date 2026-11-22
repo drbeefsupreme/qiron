@@ -29,12 +29,23 @@ function signal(online) {
   el("signal").textContent = online ? "LIVE FEED" : "RECONNECTING";
 }
 function account(data) {
-  el("credits").textContent = fmt(data.credits);
+  const busted = data.refill_in !== null;
+  el("balance").textContent = fmt(data.piss_coin);
+  el("refill").hidden = !busted;
+  el("leverage").disabled = busted;
+  el("claim").disabled = !busted || data.refill_in > 0 || busy;
+  if (busted) {
+    const seconds = data.refill_in;
+    el("cooldown").textContent = seconds
+      ? "Liquidated. Next slug in " + Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0")
+      : "Your next slug is ready.";
+    el("receipt").textContent = "";
+  }
   el("side").textContent =
-    "POSITION · " + (data.side === "flat" ? "NONE" : data.side.toUpperCase());
+    "POSITION · " + (data.side === "flat" ? "NONE" : data.side.toUpperCase() + " · " + data.leverage + "×");
   el("close").hidden = data.side === "flat";
   for (const side of ["up", "down"]) {
-    el(side).disabled = busy || data.side === side;
+    el(side).disabled = busy || busted || data.side === side;
     el(side).setAttribute("aria-pressed", String(data.side === side));
   }
 }
@@ -128,13 +139,13 @@ async function refresh() {
     if (seq === version) signal(false);
   }
 }
-async function command(payload, message) {
+async function command(payload, message, path = view === "audience" ? "trade" : "operator") {
   if (busy) return;
   busy = true;
   ++version;
   el("error").textContent = "";
   try {
-    await api(view === "audience" ? "trade" : "operator", payload);
+    await api(path, payload);
     el("receipt").textContent = message;
     return true;
   } catch (e) {
@@ -145,10 +156,12 @@ async function command(payload, message) {
   }
 }
 if (view === "audience") {
+  el("leverage").oninput = () => { el("multiplier").value = el("leverage").value + "×"; };
+  el("claim").onclick = () => command({}, "Slug received.", "refill");
   for (const side of ["up", "down", "flat"]) {
     el(side === "flat" ? "close" : side).onclick = () =>
       command(
-        { side },
+        { side, leverage: Number(el("leverage").value) },
         side === "flat"
           ? "Position closed."
           : "You called " + side + ". Eyes on the Chyron.",

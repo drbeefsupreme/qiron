@@ -387,3 +387,12 @@ a {
   resize: vertical;
   min-height: 2.8em;
 }
+
+.leverage {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.3em;
+  margin: 0 0 1em;
+}
+.leverage output { font-weight: bold; }
+.leverage input { grid-column: 1 / -1; width: 100%; accent-color: var(--red); }

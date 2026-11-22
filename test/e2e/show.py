@@ -121,6 +121,10 @@ def rehearse(browser, url, password, panel):
     audience = [browser.new_page(viewport={"width": 390, "height": 844}) for _ in range(2)]
     for phone, side in zip(audience, ("up", "down")):
         phone.goto(url)
+        expect(phone.locator("#balance")).to_have_text("50,000.00")
+        if side == "up":
+            phone.locator("#leverage").press("End")
+            expect(phone.locator("#multiplier")).to_have_text("50×")
         phone.locator("#" + side).click()
         expect(phone.locator("#side")).to_contain_text(side.upper())
     set_price("110")
@@ -128,12 +132,24 @@ def rehearse(browser, url, password, panel):
     stage.goto(url + "/stage")
     expect(stage.locator("#l2")).to_contain_text("UP  1    DOWN  1", use_inner_text=False)
     panel.expect(0, struct.pack("<i", -1) + b"CROW BLOOD  110.00")
-    for phone, value in zip(audience, ("1,010.00", "990.00")):
-        expect(phone.locator("#credits")).to_have_text(value)
+    for phone, value in zip(audience, ("300,000.00", "45,000.00")):
+        expect(phone.locator("#balance")).to_have_text(value)
         phone.locator("#close").click()
         expect(phone.locator("#side")).to_contain_text("NONE")
         phone.reload()
-        expect(phone.locator("#credits")).to_have_text(value)
+        expect(phone.locator("#balance")).to_have_text(value)
+
+    long = audience[0]
+    long.locator("#leverage").press("End")
+    long.locator("#up").click()
+    expect(long.locator("#side")).to_contain_text("50×")
+    set_price("107")
+    expect(long.locator("#balance")).to_have_text("0.00")
+    long.reload()
+    expect(long.locator("#cooldown")).to_contain_text("Liquidated")
+    expect(long.locator("#claim")).to_be_disabled()
+    expect(long.locator("#down")).to_be_disabled()
+    assert long.request.post(url + "/api/refill", headers={"x-qiron": "1"}, data={}).status == 409
 
     cue = "Q" + "ab" * 16383
     layer = operator.locator("#layer4")

@@ -1,6 +1,9 @@
 defmodule Qiron.Market do
   use GenServer
 
+  @slug 5_000_000
+  @cooldown_ms 300_000
+
   defstruct mark: 10000,
             previous: 10000,
             held: false,
@@ -22,7 +25,7 @@ defmodule Qiron.Market do
       end
 
     if Keyword.get(opts, :tick, true), do: Process.send_after(self(), :tick, 2000)
-    {:ok, {show, path}}
+    {:ok, persist(migrate_accounts(show), show, path)}
   end
 
   def handle_info(:tick, {s, path}) do
@@ -50,15 +53,39 @@ defmodule Qiron.Market do
   defp apply_command(:stage, s), do: {s, stage(s)}
   defp apply_command({:account, id}, s), do: {s, account(s, id)}
 
-  defp apply_command({:trade, id, side}, s) when side in ["up", "down", "flat"] do
-    player = player(s, id)
+  defp apply_command({:trade, id, side, leverage}, s)
+       when side in ["up", "down", "flat"] and leverage in 1..50 do
+    p = player(s, id)
 
-    if player.side == side do
-      {s, account(s, id)}
-    else
-      updated = %{side: side, entry: s.mark, bank: equity(player, s.mark)}
-      next = %{s | players: Map.put(s.players, id, updated)}
-      {next, account(next, id)}
+    cond do
+      p.refill_at != nil ->
+        {s, :liquidated}
+
+      p.side == side ->
+        {s, account(s, id)}
+
+      true ->
+        next = %{
+          p
+          | side: side,
+            entry: s.mark,
+            bank: equity(p, s.mark),
+            leverage: if(side == "flat", do: 1, else: leverage)
+        }
+
+        save_player(s, id, next)
+    end
+  end
+
+  defp apply_command({:refill, id}, s) do
+    case player(s, id).refill_at do
+      nil ->
+        {s, :invalid}
+
+      deadline ->
+        if System.system_time(:millisecond) >= deadline,
+          do: save_player(s, id, fresh_player(s.mark)),
+          else: {s, :liquidated}
     end
   end
 
@@ -132,28 +159,76 @@ defmodule Qiron.Market do
   defp move(s, cents) do
     mark = min(1_000_000, max(100, cents))
 
+    deadline = System.system_time(:millisecond) + @cooldown_ms
+
     players =
       Map.new(s.players, fn {id, p} ->
-        if p.side != "flat" and equity(p, mark) <= p.bank - min(p.bank, 10_000),
-          do: {id, %{p | side: "flat", bank: equity(p, mark)}},
+        if p.side != "flat" and equity(p, mark) == 0,
+          do: {id, %{p | side: "flat", bank: 0, leverage: 1, refill_at: deadline}},
           else: {id, p}
       end)
 
     %{s | previous: s.mark, mark: mark, players: players}
   end
 
-  defp player(s, id), do: Map.get(s.players, id, %{side: "flat", bank: 100_000, entry: s.mark})
+  defp fresh_player(mark),
+    do: %{side: "flat", bank: @slug, entry: mark, leverage: 1, refill_at: nil}
+
+  defp player(s, id), do: Map.get(s.players, id, fresh_player(s.mark))
+
+  defp save_player(s, id, player) do
+    next = %{s | players: Map.put(s.players, id, player)}
+    {next, account(next, id)}
+  end
+
+  defp migrate_accounts(s) do
+    players =
+      Map.new(s.players, fn
+        {_, %{leverage: _}} = current ->
+          current
+
+        {id, old} ->
+          stake = min(old.bank, 10_000)
+
+          change =
+            case old.side do
+              "flat" -> 0
+              "up" -> s.mark - old.entry
+              "down" -> old.entry - s.mark
+            end
+
+          bank = 50 * (old.bank + max(-stake, round(stake * change / old.entry)))
+          deadline = if bank == 0, do: System.system_time(:millisecond) + @cooldown_ms
+          {id, %{fresh_player(s.mark) | bank: bank, refill_at: deadline}}
+      end)
+
+    %{s | players: players}
+  end
+
   defp equity(%{side: "flat", bank: bank}, _), do: bank
 
   defp equity(p, mark) do
-    sign = if p.side == "up", do: 1, else: -1
-    stake = min(p.bank, 10_000)
-    p.bank + max(-stake, round(stake * sign * (mark - p.entry) / p.entry))
+    change = if p.side == "up", do: mark - p.entry, else: p.entry - mark
+    pnl = p.bank * p.leverage * change
+    rounded = div(abs(pnl) + div(p.entry, 2), p.entry)
+    max(0, p.bank + if(pnl < 0, do: -rounded, else: rounded))
   end
 
   defp account(s, id) do
     p = player(s, id)
-    %{side: p.side, credits: equity(p, s.mark) / 100, seat: String.slice(id, 0, 6)}
+
+    remaining =
+      if p.refill_at do
+        div(max(0, p.refill_at - System.system_time(:millisecond)) + 999, 1000)
+      end
+
+    %{
+      side: p.side,
+      piss_coin: equity(p, s.mark) / 100,
+      leverage: p.leverage,
+      refill_in: remaining,
+      seat: String.slice(id, 0, 6)
+    }
   end
 
   defp stage(s) do

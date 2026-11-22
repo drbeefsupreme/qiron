@@ -40,23 +40,31 @@
           <small id="side">YOUR POSITION · …</small>
         </div>
         <p>Pick a direction. Watch the Chyron for the price.</p>
+        <label class="leverage" for="leverage">Next trade leverage
+          <output id="multiplier" for="leverage">1×</output>
+          <input id="leverage" type="range" min="1" max="50" step="1" value="1">
+        </label>
         <div class="buttons">
           <button id="up" disabled><i>↗</i> I think it will go up</button
           ><button id="down" disabled><i>↘</i> I think it will go down</button>
         </div>
         <p role="status" id="receipt"></p>
         <div class="account">
-          <div><small>YOUR CREDITS</small><b id="credits">…</b></div>
+          <div><small>PISS COIN</small><b id="balance">…</b></div>
           <button id="close" hidden>Close position</button>
+        </div>
+        <div id="refill" hidden>
+          <p id="cooldown"></p>
+          <button id="claim" disabled>Claim 50,000 PISS COIN</button>
         </div>
       </section>
       <details>
         <summary>How the trade works</summary>
         <p>
-          You start with 1,000 play credits. Each call puts up to 100 at stake.
-          A 10% move in your direction earns 10 credits on a 100-credit stake.
-          Change direction or close to bank the result. If the stake runs out,
-          the position closes.
+          Start with 50,000 PISS COIN. Each call uses your balance. At 1×, a 1% move changes
+          your balance by 1%. At 50×, a 2% move against you wipes it out.
+          Close to bank the result, or switch direction to open a new trade at your selected leverage.
+          If you hit zero, wait five minutes to claim another slug.
         </p>
       </details>
       <p id="error" role="alert"></p>

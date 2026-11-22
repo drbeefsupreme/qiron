@@ -21,9 +21,9 @@ The password prompt above uses zsh. In Bash use `read -rs -p 'Booth password: ' 
 
 ## Game rules
 
-Each browser gets a private seat cookie for seven days and 1,000 fictional credits. A tap opens a position at the server’s current mark. A 1% move pays or costs one credit on a 100-credit position. The stake is the smaller of 100 credits and the current balance. Losses stop at the stake. A position closes when its stake is exhausted. Switching direction settles the old position and opens the new one at the same mark. Closing banks the result. Repeating the same call keeps the original entry price.
+Each seat starts with 50,000 PISS COIN. Each position uses the full seat balance at the chosen leverage (1× through 50×, default 1×). At 10×, a 1% move in your direction earns 10% of the entry balance. Repeating the same call keeps its entry and leverage. Switching sides settles the old position first. A balance of zero closes the position and starts a five-minute cooldown. The seat can then claim another 50,000 PISS COIN. The cooldown and balances survive server restarts. When upgrading an old snapshot, the server settles open positions at the saved mark under the old rules and converts each old credit into 50 PISS COIN.
 
-The mark starts at 100.00 and drifts by up to 0.5% every two seconds within a range of 1.00 to 10,000.00. The booth can hold the drift, move the mark by 5%, or set it directly. The audience sees its position and credits. The stage carries the shared price.
+The mark starts at 100.00 and drifts by up to 0.5% every two seconds within a range of 1.00 to 10,000.00. The booth can hold the drift, move the mark by 5%, or set it directly. The audience sees its position and PISS COIN balance. The stage carries the shared price.
 
 ## Run on a show server
 
@@ -103,4 +103,4 @@ python3 firmware/integration/panel.py /dev/ttyACM0
 
 Substitute the Teensy’s actual device path in the last command. Run this check with the booth stopped. It uses only Python 3, sets brightness to 64 out of 255, sets the middle row speed to zero and displays **QYRON PI TEST**. Three acknowledgments establish USB communication. Seeing those words on the board also tests the display output. Starting the booth restores its saved settings.
 
-For the web test, start the application using the rehearsal instructions above. On a phone connected to the Pi’s LAN, open the booth and check for **USB connected**. Select a GIF preset with a known file on the SD card. Hold the drift and set the mark to 100. Open independent audience seats and call opposite directions. Set the mark to 110. Check the physical ticker and verify that the two balances are 1,010 and 990 credits.
+For the web test, start the application using the rehearsal instructions above. On a phone connected to the Pi’s LAN, open the booth and check for **USB connected**. Select a GIF preset with a known file on the SD card. Hold the drift and set the mark to 100. Open independent audience seats and call opposite directions. Set the mark to 110. Check the physical ticker and verify that the two balances are 55,000 and 45,000 PISS COIN at 1×.

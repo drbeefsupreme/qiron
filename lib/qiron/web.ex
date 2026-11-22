@@ -36,7 +36,18 @@ defmodule Qiron.Web do
 
   post "/api/trade" do
     {conn, id} = seat(conn)
-    respond(conn, Market.call({:trade, id, conn.body_params["side"]}))
+
+    respond(
+      conn,
+      Market.call(
+        {:trade, id, conn.body_params["side"], Map.get(conn.body_params, "leverage", 1)}
+      )
+    )
+  end
+
+  post "/api/refill" do
+    {conn, id} = seat(conn)
+    respond(conn, Market.call({:refill, id}))
   end
 
   post "/api/operator" do
@@ -131,6 +142,9 @@ defmodule Qiron.Web do
          ), id}
     end
   end
+
+  defp respond(conn, :liquidated),
+    do: send_resp(conn, 409, "Claim your next slug when the cooldown ends.")
 
   defp respond(conn, :offline),
     do: send_resp(conn, 503, "Panel disconnected or acknowledgment timed out")
