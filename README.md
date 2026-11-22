@@ -41,7 +41,7 @@ The market process serializes trades and operator commands. It writes price, sea
 
 Run the Elixir application on the Pi that has the Teensy plugged into USB. The same application serves the audience, booth and stage. For a show URL, point the HTTPS reverse proxy at that Pi. The server needs Linux, Python 3 and permission to open the USB serial device. Raspberry Pi OS usually grants serial access through the `dialout` group. Restart the login session after changing groups.
 
-The controller opens `/dev/ttyACM0`. To select a stable device name, set `QYRON_DEVICE` to the Teensy symlink under `/dev/serial/by-id/` before starting the app. Run only one controller on the port. Stop Qiron before connecting the old TUI or flashing over USB.
+The controller opens `/dev/ttyACM0`. To select a stable device name, set `QYRON_DEVICE` to the Teensy symlink under `/dev/serial/by-id/` before starting the app. Run only one controller on the port. Stop the running controller before flashing over USB.
 
 In `/operator`, the USB status shows the panel connection. The six layers have independent text and speed controls. The first five normally carry the show feed. Saving an empty field restores that feed for its layer. The sixth field drives the feature layer. Text accepts up to 32,767 UTF-8 bytes per layer. The panel uses its existing bitmap fonts. The booth also controls brightness, CAW, DOPAMINE, clearing, backgrounds, blinking, shapes, pixels, and GIF playback. Choose a cue and press **Run**.
 
@@ -61,14 +61,14 @@ Keep the show’s GIFs on the Teensy microSD card. Use one directory per preset 
 
 ## USB interface
 
-Legacy clients can discover and call the original 37 simpleRPC methods in their original order. The Pi controller uses framed commands on that same port. Flash the new image before starting the new controller. Each framed request begins with `FE` (hex), a one-byte method index, and a little-endian unsigned 16-bit payload length. The Pi waits for `FE 00` (accepted) or `FE 01` (invalid) before sending the next request.
+The Pi and Teensy use one framed binary protocol over USB serial. Flash the new image before starting the new controller. Each framed request begins with `FE` (hex), a one-byte method index, and a little-endian unsigned 16-bit payload length. The Pi waits for `FE 00` (accepted) or `FE 01` (invalid) before sending the next request.
 
 | Method index | Operation | Payload |
 | --- | --- | --- |
 | 0–5 | Start text on 1, 2, 3, 4, 5, F | Signed 32-bit little-endian repeat count, then text bytes without a NUL. The booth uses −1 for continuous scrolling. |
 | 6–11 | Set scroll speed on the corresponding layer | One byte |
 | 12 | Set brightness | One byte |
-| 13–36 | Effects and GIF actions in legacy order | Empty |
+| 13–36 | Demo, shapes, pixels, backgrounds, blink, GIF controls and presets, clear loops | Empty |
 
 `GET /api/stage` remains public and returns the mark, change, drift hold flag, position counts, and five ordered layer records. The booth reads the authenticated `GET /api/panel` for device status, six layer settings, brightness and action names.
 
@@ -85,9 +85,22 @@ python3 -m venv /tmp/qiron-browser
 
 Set `CHROMIUM` to use an already-installed Chrome or Chromium executable. The test operates the booth, verifies two opposite positions against the same mark, and checks the serial bytes for a full-size cue.
 
-For the firmware protocol integration test, install a C++17 compiler and run the following from the repo root. The test connects the original Python simpleRPC client and a framed client to a host build of the firmware parser through a pseudo-terminal. It checks discovery, calls, maximum-size text, invalid frames, and recovery.
+Run the firmware parser integration check on Linux with Python 3 and a C++17 compiler. It sends fragmented and maximum-size cues over a pseudo-terminal, checks accepted and rejected replies, and verifies that unframed input has no effect.
 
 ```sh
-/tmp/qiron-browser/bin/pip install -r firmware/integration/requirements.txt
-/tmp/qiron-browser/bin/python firmware/integration/usb.py
+python3 firmware/integration/usb.py
 ```
+
+## First physical test
+
+Start the rehearsal in a fresh checkout on the Pi connected to the Teensy. Quit the old controller and stop its service if it normally launches automatically. Leave the show microSD card in the Teensy. Download the matching Teensy 4.1 HEX and flash it from the Pi with PJRC’s command-line loader. Tap the board’s Program button once when the loader is waiting.
+
+```sh
+teensy_loader_cli --mcu=TEENSY41 -w -v ~/qyron-teensy41.hex
+ls -l /dev/serial/by-id/
+python3 firmware/integration/panel.py /dev/ttyACM0
+```
+
+Substitute the Teensy’s actual device path in the last command. Run this check with the booth stopped. It uses only Python 3, sets brightness to 64 out of 255, sets the middle row speed to zero and displays **QYRON PI TEST**. Three acknowledgments establish USB communication. Seeing those words on the board also tests the display output. Starting the booth restores its saved settings.
+
+For the web test, start the application using the rehearsal instructions above. On a phone connected to the Pi’s LAN, open the booth and check for **USB connected**. Select a GIF preset with a known file on the SD card. Hold the drift and set the mark to 100. Open independent audience seats and call opposite directions. Set the mark to 110. Check the physical ticker and verify that the two balances are 1,010 and 990 credits.

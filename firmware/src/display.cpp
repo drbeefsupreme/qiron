@@ -178,7 +178,15 @@ void drawShape() {
         case 10: background.fillCircle(x,y,r,edge,inside); break;
         case 11: background.fillTriangle(x,y,x1,y1,x2,y2,edge,inside); break;
         case 12: background.fillRectangle(x,y,x1,y1,edge,inside); break;
-        case 13: background.fillRoundRectangle(x,y,x1,y1,r,edge,inside); break;
+        case 13:
+            fill(red);
+            __disable_irq();
+            feature.setVisible(false);
+            demo.start(demoTitle, 1);
+            demo.setVisible(true);
+            __enable_irq();
+            demoVisible = true;
+            break;
         case 14: background.drawEllipse(x,y,r,random(Width),edge); break;
     }
     background.swapBuffers();
@@ -225,20 +233,14 @@ void begin() {
 
 void text(uint8_t layer, const char* value, int32_t repeats) {
     __disable_irq();
-    lines[layer]->start(value, repeats);
-    if (!*value) memset(lines[layer]->scrollingBitmap, 0, Width * Height / 8);
+    if (hasText[layer] && *value && repeats == -1 && lines[layer]->getStatus() == -1) {
+        lines[layer]->update(value);
+    } else {
+        lines[layer]->start(value, repeats);
+        if (!*value) memset(lines[layer]->scrollingBitmap, 0, Width * Height / 8);
+    }
     __enable_irq();
     hasText[layer] = *value != 0;
-}
-
-void liveText(uint8_t layer, const char* value, int32_t repeats) {
-    if (hasText[layer] && *value && repeats == -1 && lines[layer]->getStatus() == -1) {
-        __disable_irq();
-        lines[layer]->update(value);
-        __enable_irq();
-    } else {
-        text(layer, value, repeats);
-    }
 }
 
 void speed(uint8_t layer, uint8_t value) {
@@ -308,20 +310,6 @@ void effect(uint8_t method) {
                 playing = cycling = true;
             }
     }
-}
-
-void liveEffect(uint8_t method) {
-    if (method != 13) {
-        effect(method);
-        return;
-    }
-    fill(red);
-    __disable_irq();
-    feature.setVisible(false);
-    demo.start(demoTitle, 1);
-    demo.setVisible(true);
-    __enable_irq();
-    demoVisible = true;
 }
 
 void tick() {
