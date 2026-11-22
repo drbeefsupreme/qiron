@@ -17,7 +17,7 @@ The password prompt above uses zsh. In Bash use `read -rs -p 'Booth password: ' 
 
 1. Open the audience page in two browsers. Call up on one and down on the other.
 2. In the booth, hold the drift and set the price. Both phones update their balances. The stage shows the mark and the up/down counts.
-3. Enter a cue in one of the five layer fields and save it. Clear the field and save again to resume its automatic feed.
+3. Enter a cue in one of the five stage layer fields and save it. Clear the field and save again to resume its automatic feed.
 
 ## Game rules
 
@@ -37,12 +37,57 @@ _build/prod/rel/qiron/bin/qiron start
 
 The market process serializes trades and operator commands. It writes price, seats, and layer overrides to a single snapshot before acknowledging changes. Restarting restores that show. Point `SHOW_FILE` at a fresh path to rehearse a separate show. The default path is `data/show.etf`.
 
-## Connect a Chyron reader
+## Run the booth on the Raspberry Pi 4
 
-Poll `GET /api/stage` from the display host. The browser preview uses a 1.5-second interval. Each response contains the mark, change since the prior mark update, drift hold flag, up/down counts and five ordered layers. Each layer has an integer `id`, rendered `text`, and an `override` string. Layers 1 through 3 represent the horizontal rows. Layers 4 and 5 represent the side columns.
+Run the Elixir application on the Pi that has the Teensy plugged into USB. The same application serves the audience, booth and stage. For a show URL, point the HTTPS reverse proxy at that Pi. The server needs Linux, Python 3 and permission to open the USB serial device. Raspberry Pi OS usually grants serial access through the `dialout` group. Restart the login session after changing groups.
 
-The physical bridge is a later step. The existing controller sends text to the Teensy through `scrollingLayerN_start(text_bytes, -1)`. A bridge can compare layer text between snapshots and send only changed lines. Layer orientation and scrolling speed need a rehearsal on the panel. [Existing Qyron controller](https://github.com/drbeefsupreme/qyron-tui/blob/master/py_rpc/python/connect.py)
+The controller opens `/dev/ttyACM0`. To select a stable device name, set `QYRON_DEVICE` to the Teensy symlink under `/dev/serial/by-id/` before starting the app. Run only one controller on the port. Stop Qiron before connecting the old TUI or flashing over USB.
 
-## Iterate
+In `/operator`, the USB status shows the panel connection. The six layers have independent text and speed controls. The first five normally carry the show feed. Saving an empty field restores that feed for its layer. The sixth field drives the feature layer. Text accepts up to 32,767 UTF-8 bytes per layer. The panel uses its existing bitmap fonts. The booth also controls brightness, CAW, DOPAMINE, clearing, backgrounds, blinking, shapes, pixels, and GIF playback. Choose a cue and press **Run**.
 
-Run `mix test` to check scoring, settlement, liquidation, and restore. Edit the HTML, CSS, and JavaScript in `priv/static` and refresh the browser during development. Restart the Mix process after editing Elixir. The specimen illustration uses Canvas 2D. The market API can also drive WebGL shaders from the browser.
+Text, speed and brightness settings survive a disconnect and a show restart. The controller resends them when the panel reconnects. One-shot effects require a live connection. If a cue times out, check the panel before repeating it. The device may have acted before its reply was lost. The audience and browser stage work while the panel is unplugged.
+
+## Build the Teensy 4.1 firmware
+
+Use PlatformIO Core and Git on a build host. From the repo root run:
+
+```sh
+pio run -d firmware
+```
+
+The image is `firmware/.pio/build/teensy41/firmware.hex`. On a machine with the Teensy attached, use `pio run -d firmware -t upload` with the Teensy loader tools installed. Press the board’s program button if the loader asks. The target preserves USB Serial + HID, SmartLED Shield V5, the 128 × 96 HUB75 layout and C-shaped stacking. The firmware build pins SmartMatrix and applies the long-text changes automatically.
+
+Keep the show’s GIFs on the Teensy microSD card. Use one directory per preset under `/gifs/`: `koyaanisqatsi`, `obama`, `flag`, `drugs`, `joker`, `spooky`, `subgenius`, `transparent`, `aj`, `blue`, and `hank`. Boot defaults to the Joker directory. Rehearse panel orientation, scroll speed, GIF colors and brightness on the actual rig.
+
+## USB interface
+
+Legacy clients can discover and call the original 37 simpleRPC methods in their original order. The Pi controller uses framed commands on that same port. Flash the new image before starting the new controller. Each framed request begins with `FE` (hex), a one-byte method index, and a little-endian unsigned 16-bit payload length. The Pi waits for `FE 00` (accepted) or `FE 01` (invalid) before sending the next request.
+
+| Method index | Operation | Payload |
+| --- | --- | --- |
+| 0–5 | Start text on 1, 2, 3, 4, 5, F | Signed 32-bit little-endian repeat count, then text bytes without a NUL. The booth uses −1 for continuous scrolling. |
+| 6–11 | Set scroll speed on the corresponding layer | One byte |
+| 12 | Set brightness | One byte |
+| 13–36 | Effects and GIF actions in legacy order | Empty |
+
+`GET /api/stage` remains public and returns the mark, change, drift hold flag, position counts, and five ordered layer records. The booth reads the authenticated `GET /api/panel` for device status, six layer settings, brightness and action names.
+
+## Verification
+
+Run `mix test` for the market integration check. On Linux, the browser rehearsal starts its own server with a temporary snapshot and booth password, opens independent audience seats and attaches a simulated Teensy over a pseudo-terminal. Install the test-only browser dependency in a virtual environment:
+
+```sh
+python3 -m venv /tmp/qiron-browser
+/tmp/qiron-browser/bin/pip install playwright
+/tmp/qiron-browser/bin/python -m playwright install chromium
+/tmp/qiron-browser/bin/python test/e2e/show.py
+```
+
+Set `CHROMIUM` to use an already-installed Chrome or Chromium executable. The test operates the booth, verifies two opposite positions against the same mark, and checks the serial bytes for a full-size cue.
+
+For the firmware protocol integration test, install a C++17 compiler and run the following from the repo root. The test connects the original Python simpleRPC client and a framed client to a host build of the firmware parser through a pseudo-terminal. It checks discovery, calls, maximum-size text, invalid frames, and recovery.
+
+```sh
+/tmp/qiron-browser/bin/pip install -r firmware/integration/requirements.txt
+/tmp/qiron-browser/bin/python firmware/integration/usb.py
+```

@@ -1,6 +1,13 @@
 defmodule Qiron.Market do
   use GenServer
-  defstruct mark: 10000, previous: 10000, held: false, players: %{}, lines: %{}
+
+  defstruct mark: 10000,
+            previous: 10000,
+            held: false,
+            players: %{},
+            lines: %{},
+            speeds: %{},
+            brightness: 255
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
   def call(command, server \\ __MODULE__), do: GenServer.call(server, command)
@@ -10,7 +17,7 @@ defmodule Qiron.Market do
 
     show =
       case File.read(path) do
-        {:ok, bytes} -> :erlang.binary_to_term(bytes, [:safe])
+        {:ok, bytes} -> Map.merge(%__MODULE__{}, :erlang.binary_to_term(bytes, [:safe]))
         {:error, :enoent} -> %__MODULE__{}
       end
 
@@ -61,13 +68,66 @@ defmodule Qiron.Market do
   defp apply_command({:nudge, dir}, s) when dir in [-1, 1],
     do: {move(s, round(s.mark * (1 + dir * 0.05))), :ok}
 
+  defp apply_command(:panel, s) do
+    layers =
+      stage(s).layers ++
+        [%{id: 6, text: Map.get(s.lines, 6, ""), override: Map.get(s.lines, 6, "")}]
+
+    defaults = [10, 20, 40, 80, 120, 40]
+
+    layers =
+      Enum.zip_with(layers, defaults, fn l, speed ->
+        Map.put(l, :speed, Map.get(s.speeds, l.id, speed))
+      end)
+
+    {s, %{brightness: s.brightness, layers: layers}}
+  end
+
   defp apply_command({:line, layer, text}, s)
-       when layer in 1..5 and is_binary(text) and byte_size(text) <= 100 do
-    lines = if text == "", do: Map.delete(s.lines, layer), else: Map.put(s.lines, layer, text)
-    {%{s | lines: lines}, :ok}
+       when layer in 1..6 and is_binary(text) and byte_size(text) <= 32767 do
+    if String.valid?(text) and not String.contains?(text, <<0>>) do
+      lines = if text == "", do: Map.delete(s.lines, layer), else: Map.put(s.lines, layer, text)
+      {%{s | lines: lines}, :ok}
+    else
+      {s, :invalid}
+    end
+  end
+
+  defp apply_command({:speed, layer, speed}, s) when layer in 1..6 and speed in 0..255,
+    do: {%{s | speeds: Map.put(s.speeds, layer, speed)}, :ok}
+
+  defp apply_command({:brightness, value}, s) when value in 0..255,
+    do: {%{s | brightness: value}, :ok}
+
+  defp apply_command({:macro, name}, s) when name in ["clear", "clearText"] do
+    {%{s | lines: Map.merge(s.lines, Map.new(1..5, &{&1, ""}))}, :ok}
+  end
+
+  defp apply_command({:macro, name}, s) when name in ["caw", "dopamine"] do
+    lines = Enum.with_index(macro_lines(name), 1) |> Map.new(fn {text, i} -> {i, text} end)
+    speeds = Map.new(1..5, &{&1, :rand.uniform(99)})
+    {%{s | lines: Map.merge(s.lines, lines), speeds: Map.merge(s.speeds, speeds)}, :ok}
   end
 
   defp apply_command(_, s), do: {s, :invalid}
+
+  defp macro_lines("caw"),
+    do: [
+      "CAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAW",
+      "CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW",
+      "CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW",
+      "CAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAW",
+      "CAW"
+    ]
+
+  defp macro_lines("dopamine"),
+    do: [
+      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE ",
+      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE",
+      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE",
+      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE",
+      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE"
+    ]
 
   defp move(s, cents) do
     mark = min(1_000_000, max(100, cents))

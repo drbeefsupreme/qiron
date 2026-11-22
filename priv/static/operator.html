@@ -41,10 +41,14 @@
         </form>
       </section>
       <section class="ticket">
-        <h2>Chyron layers</h2>
+        <div class="tickethead"><h2>QYRON panel</h2><b id="panel-status">Connecting…</b></div>
+        <form id="set-brightness"><label>Brightness (0–255)<input id="brightness" type="number" min="0" max="255" required></label><button>Set brightness</button></form>
+        <form id="panel-action"><label>Effects, GIFs and macros<select id="action"></select></label><button id="run-action">Run</button></form>
+      </section>
+      <section class="ticket">
+        <h2>Scrolling layers</h2>
         <p>
-          Save a line to override its feed. Save an empty line to restore the
-          feed.
+          Save a line to override its feed. Save an empty line to restore it. Each layer holds up to 32,767 UTF-8 bytes.
         </p>
         <div id="layers"></div>
       </section>

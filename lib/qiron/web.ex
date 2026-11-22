@@ -12,13 +12,22 @@ defmodule Qiron.Web do
 
   plug(:match)
   plug(:authorize)
-  plug(Plug.Parsers, parsers: [:json], json_decoder: JSON, length: 2048)
+  plug(Plug.Parsers, parsers: [:json], json_decoder: JSON, length: 205_000)
   plug(:dispatch)
 
   get("/", do: page(conn, "audience"))
   get("/stage", do: page(conn, "stage"))
   get("/operator", do: page(conn, "operator"))
   get("/api/stage", do: respond(conn, Market.call(:stage)))
+
+  get "/api/panel" do
+    panel = Market.call(:panel)
+
+    respond(
+      conn,
+      Map.merge(panel, %{status: Qiron.Panel.status(), actions: Qiron.Panel.actions()})
+    )
+  end
 
   get "/api/me" do
     {conn, id} = seat(conn)
@@ -42,6 +51,15 @@ defmodule Qiron.Web do
         %{"mark" => mark} when is_number(mark) and mark >= 1 and mark <= 10_000 ->
           {:mark, round(mark * 100)}
 
+        %{"brightness" => value} ->
+          {:brightness, value}
+
+        %{"layer" => i, "speed" => speed} ->
+          {:speed, i, speed}
+
+        %{"action" => name} ->
+          {:panel_action, name}
+
         %{"layer" => i, "text" => t} ->
           {:line, i, t}
 
@@ -49,7 +67,13 @@ defmodule Qiron.Web do
           :invalid
       end
 
-    respond(conn, Market.call(command))
+    result =
+      case command do
+        {:panel_action, name} -> Qiron.Panel.action(name)
+        other -> Market.call(other)
+      end
+
+    respond(conn, result)
   end
 
   match(_, do: send_resp(conn, 404, "Page not found"))
@@ -70,7 +94,7 @@ defmodule Qiron.Web do
       conn.method == "POST" and get_req_header(conn, "x-qiron") != ["1"] ->
         conn |> send_resp(403, "Forbidden") |> halt()
 
-      Plug.Router.match_path(conn) in ["/operator", "/api/operator"] ->
+      Plug.Router.match_path(conn) in ["/operator", "/api/operator", "/api/panel"] ->
         case System.get_env("OPERATOR_PASSWORD") do
           pw when is_binary(pw) and byte_size(pw) >= 12 ->
             Plug.BasicAuth.basic_auth(conn, username: "beef", password: pw)
@@ -108,6 +132,10 @@ defmodule Qiron.Web do
     end
   end
 
+  defp respond(conn, :offline),
+    do: send_resp(conn, 503, "Panel disconnected or acknowledgment timed out")
+
+  defp respond(conn, :rejected), do: send_resp(conn, 502, "Panel rejected command")
   defp respond(conn, :invalid), do: send_resp(conn, 422, "Invalid command")
   defp respond(conn, :ok), do: respond(conn, %{ok: true})
 

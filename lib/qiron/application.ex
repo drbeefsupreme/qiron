@@ -6,6 +6,7 @@ defmodule Qiron.Application do
       if Application.fetch_env!(:qiron, :server) do
         [
           {Qiron.Market, path: System.get_env("SHOW_FILE", "data/show.etf"), name: Qiron.Market},
+          Qiron.Panel,
           {Bandit,
            plug: Qiron.Web,
            port: String.to_integer(System.get_env("PORT", "4000")),

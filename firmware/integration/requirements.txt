@@ -1,0 +1,2 @@
+arduino-simple-rpc==2.4.2
+setuptools==70.3.0

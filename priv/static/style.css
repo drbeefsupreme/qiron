@@ -269,7 +269,8 @@ body:not([data-view="audience"]) h1 {
 }
 .board {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1.6em minmax(0, 1fr) 1.6em;
+  grid-template-rows: minmax(0, auto);
   background: #211e1a;
   color: #ff705b;
   text-align: center;
@@ -282,12 +283,17 @@ body:not([data-view="audience"]) h1 {
   font: inherit;
   border-bottom: 1px solid #684632;
   padding: 0.55em 0.15em;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .board aside {
   writing-mode: vertical-rl;
   background: #392824;
-  overflow-wrap: anywhere;
+  contain: size;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0.2em;
 }
 .stageinfo {
@@ -366,4 +372,18 @@ a {
   .board {
     font-size: 15px;
   }
+}
+
+#layers fieldset {
+  min-width: 0;
+  margin: 1em 0;
+  border: 1px solid currentColor;
+}
+#layers textarea, #action {
+  max-width: 100%;
+  font: inherit;
+}
+#layers textarea {
+  resize: vertical;
+  min-height: 2.8em;
 }

@@ -1,0 +1,112 @@
+diff --git a/src/Layer_Scrolling.h b/src/Layer_Scrolling.h
+index 5a9721a..f3144d0 100644
+--- a/src/Layer_Scrolling.h
++++ b/src/Layer_Scrolling.h
+@@ -30,4 +30,5 @@
+ // scroll text
+-const int textLayerMaxStringLength = 100;
++const int textLayerMaxStringLength = 32768;
+ 
++#define SM_SCROLLING_OPTIONS_SHORT_TEXT (1u << 0)
+ #define SM_SCROLLING_OPTIONS_NONE     0
+@@ -53,2 +54,3 @@ class SMLayerScrolling : public SM_Layer {
+         void stop(void);
++        void setVisible(bool visible) { layerVisible = visible; }
+         int getStatus(void) const;
+@@ -76,6 +78,7 @@ class SMLayerScrolling : public SM_Layer {
+         unsigned char currentframe = 0;
+-        char text[textLayerMaxStringLength];
++        bool layerVisible = true;
++        char text[optionFlags & SM_SCROLLING_OPTIONS_SHORT_TEXT ? 64 : textLayerMaxStringLength];
+         unsigned char pixelsPerSecond = 30;
+ 
+-        unsigned char textlen;
++        uint16_t textlen = 0;
+         volatile int scrollcounter = 0;
+diff --git a/src/Layer_Scrolling_Impl.h b/src/Layer_Scrolling_Impl.h
+index e748d29..6350606 100644
+--- a/src/Layer_Scrolling_Impl.h
++++ b/src/Layer_Scrolling_Impl.h
+@@ -135,2 +135,3 @@ template <typename RGB, unsigned int optionFlags>
+ void SMLayerScrolling<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb48 refreshRow[], int brightnessShifts) {
++    if (!layerVisible) return;
+     rgb48 currentPixel;
+@@ -153,2 +154,3 @@ template <typename RGB, unsigned int optionFlags>
+ void SMLayerScrolling<RGB, optionFlags>::fillRefreshRow(uint16_t hardwareY, rgb24 refreshRow[], int brightnessShifts) {
++    if (!layerVisible) return;
+     rgb24 currentPixel;
+@@ -228,16 +230,14 @@ template <typename RGB, unsigned int optionFlags>
+ void SMLayerScrolling<RGB, optionFlags>::start(const char inputtext[], int numScrolls) {
+-    // int length = strlen((const char *)inputtext);
+-    // if (length > textLayerMaxStringLength)
+-    //     length = textLayerMaxStringLength;
+-    int length = textLayerMaxStringLength;
+-    if ((int)strlen((const char *)inputtext) < length)
+-        length = strlen((const char *)inputtext);
+-    strncpy(text, (const char *)inputtext, length);
+-    text[textLayerMaxStringLength-1] = '\0'; // add null-termination to fix compiler warning
+-    textlen = length;
++    textlen = strnlen(inputtext, sizeof(text) - 1);
++    memcpy(text, inputtext, textlen);
++    text[textlen] = 0;
+     scrollcounter = numScrolls;
+ 
+-    textWidth = (textlen * scrollFont->Width) - 1;
++    textWidth = textlen ? textlen * scrollFont->Width - 1 : 0;
+ 
+     setMinMax();
++    if (!pixelsPerSecond) {
++        scrollPosition = 0;
++        redrawScrollingText();
++    }
+  }
+@@ -248,14 +248,11 @@ template <typename RGB, unsigned int optionFlags>
+ void SMLayerScrolling<RGB, optionFlags>::update(const char inputtext[]){
+-    // int length = strlen((const char *)inputtext);
+-    // if (length > textLayerMaxStringLength)
+-    //     length = textLayerMaxStringLength;
+-    int length = textLayerMaxStringLength;
+-    if ((int)strlen((const char *)inputtext) < length)
+-        length = strlen((const char *)inputtext);
+-    strncpy(text, (const char *)inputtext, length);
+-    text[textLayerMaxStringLength-1] = '\0'; // add null-termination to fix compiler warning
+-    textlen = length;
+-    textWidth = (textlen * scrollFont->Width) - 1;
++    textlen = strnlen(inputtext, sizeof(text) - 1);
++    memcpy(text, inputtext, textlen);
++    text[textlen] = 0;
++    textWidth = textlen ? textlen * scrollFont->Width - 1 : 0;
+ 
++    int position = scrollPosition;
+     setMinMax();
++    scrollPosition = position < scrollMin ? scrollMin : position > scrollMax ? scrollMax : position;
++    if (!pixelsPerSecond) redrawScrollingText();
+ }
+@@ -269,3 +266,3 @@ void SMLayerScrolling<RGB, optionFlags>::updateScrollingText(void) {
+     // return if not ready to update
+-    if (!scrollcounter || ++currentframe <= framesperscroll)
++    if (!pixelsPerSecond || !scrollcounter || ++currentframe <= framesperscroll)
+         return;
+@@ -329,3 +326,3 @@ void SMLayerScrolling<RGB, optionFlags>::setRefreshRate(uint8_t newRefreshRate)
+     this->refreshRate = newRefreshRate;
+-    framesperscroll = (this->refreshRate * 1.0) / pixelsPerSecond;
++    framesperscroll = pixelsPerSecond ? this->refreshRate / pixelsPerSecond : 0;
+ }
+@@ -335,3 +332,7 @@ void SMLayerScrolling<RGB, optionFlags>::setSpeed(unsigned char pixels_per_secon
+     pixelsPerSecond = pixels_per_second;
+-    framesperscroll = (this->refreshRate * 1.0) / pixelsPerSecond;
++    framesperscroll = pixelsPerSecond ? this->refreshRate / pixelsPerSecond : 0;
++    if (!pixelsPerSecond) {
++        scrollPosition = 0;
++        redrawScrollingText();
++    }
+ }
+@@ -373,5 +374,5 @@ void SMLayerScrolling<RGB, optionFlags>::redrawScrollingText(void) {
+         // move to first character at least partially on screen
+-        while (charPosition + scrollFont->Width < 0 ) {
+-            charPosition += scrollFont->Width;
+-            textPosition++;
++        if (charPosition < -scrollFont->Width) {
++            textPosition = (-charPosition - 1) / scrollFont->Width;
++            charPosition += textPosition * scrollFont->Width;
+         }
