@@ -141,6 +141,12 @@ def rehearse(browser, url, password, panel):
             panel.expect(42, b"", start)
         assert request.get(url + "/api/stage").json()["mode"] == mode
 
+    operator.locator("#volatility").press("End")
+    expect(operator.locator("#volatility-label")).to_have_text("±5.00%")
+    expect(operator.locator("#volatility")).to_be_enabled()
+    assert panel_state()["volatility_bps"] == 500
+    expect(operator.locator("#marketmeta")).to_contain_text("Drift held")
+
     set_price("100")
     start = len(panel.frames)
     operator.locator("#mode-blood").click()
@@ -155,8 +161,10 @@ def rehearse(browser, url, password, panel):
         if side == "up":
             phone.locator("#leverage").press("End")
             expect(phone.locator("#multiplier")).to_have_text("50×")
+            expect(phone.locator("#up-liq")).to_have_text("98.00")
+            expect(phone.locator("#down-liq")).to_have_text("102.00")
         phone.locator("#" + side).click()
-        expect(phone.locator("#side")).to_contain_text(side.upper())
+        expect(phone.locator("#side")).to_contain_text("Long" if side == "up" else "Short")
     set_price("110")
     expect(stage.locator("#bulls")).to_have_text("1")
     expect(stage.locator("#bears")).to_have_text("1")
@@ -171,7 +179,7 @@ def rehearse(browser, url, password, panel):
     for phone, value in zip(audience, ("300,000.00", "45,000.00")):
         expect(phone.locator("#balance")).to_have_text(value)
         phone.locator("#close").click()
-        expect(phone.locator("#side")).to_contain_text("NONE")
+        expect(phone.locator("#side")).to_contain_text("Flat")
         phone.reload()
         expect(phone.locator("#balance")).to_have_text(value)
 
@@ -219,6 +227,16 @@ def rehearse(browser, url, password, panel):
     panel.expect(40, bytes([2]), start)
     take("intro")
     expect(stage.locator("#intro-screen")).to_be_visible()
+    assert stage.locator("#intro-screen").evaluate("img => img.decode().then(() => img.naturalWidth)") == 128
+    for mode, mode_id in [("crow", 3), ("beef", 4)]:
+        start = len(panel.frames)
+        operator.locator("#take-" + mode).click()
+        panel.expect(40, bytes([mode_id]), start)
+        panel.expect(42, b"", start)
+        portrait = stage.locator("#stage-" + mode + " img")
+        expect(portrait).to_be_visible()
+        assert portrait.evaluate("img => img.decode().then(() => img.naturalWidth)") == 96
+        assert request.get(url + "/api/stage").json()["mode"] == mode
     public = audience[0].request
     assert public.get(url + "/api/panel").status == 401
     assert public.post(url + "/api/operator", headers={"x-qiron": "1"},

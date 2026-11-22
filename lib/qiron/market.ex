@@ -2,12 +2,15 @@ defmodule Qiron.Market do
   use GenServer
   alias Qiron.Display
 
+  @min_mark 100
+  @max_mark 1_000_000
   @slug 5_000_000
   @cooldown_ms 300_000
 
   defstruct mark: 10000,
             previous: 10000,
             held: false,
+            volatility_bps: 50,
             players: %{},
             display: %Display{},
             draft: nil,
@@ -44,9 +47,12 @@ defmodule Qiron.Market do
 
   def handle_info(:tick, {s, path}) do
     next =
-      if s.held,
-        do: record_mark(s),
-        else: move(s, round(s.mark * (1 + (:rand.uniform(101) - 51) / 10000)))
+      if s.held do
+        record_mark(s)
+      else
+        step = :rand.uniform(2 * s.volatility_bps + 1) - s.volatility_bps - 1
+        move(s, div(s.mark * (10_000 + step) + 5_000, 10_000))
+      end
 
     Process.send_after(self(), :tick, 2000)
     {:noreply, persist(next, s, path)}
@@ -106,7 +112,12 @@ defmodule Qiron.Market do
   end
 
   defp apply_command({:hold, held}, s) when is_boolean(held), do: {%{s | held: held}, :ok}
-  defp apply_command({:mark, cents}, s) when cents in 100..1_000_000, do: {move(s, cents), :ok}
+
+  defp apply_command({:volatility_bps, value}, s) when value in 0..500,
+    do: {%{s | volatility_bps: value}, :ok}
+
+  defp apply_command({:mark, cents}, s) when cents in @min_mark..@max_mark,
+    do: {move(s, cents), :ok}
 
   defp apply_command({:nudge, dir}, s) when dir in [-1, 1],
     do: {move(s, round(s.mark * (1 + dir * 0.05))), :ok}
@@ -175,7 +186,7 @@ defmodule Qiron.Market do
   end
 
   defp move(s, cents) do
-    mark = min(1_000_000, max(100, cents))
+    mark = min(@max_mark, max(@min_mark, cents))
 
     deadline = System.system_time(:millisecond) + @cooldown_ms
 
@@ -232,8 +243,33 @@ defmodule Qiron.Market do
     max(0, p.bank + if(pnl < 0, do: -rounded, else: rounded))
   end
 
+  defp liquidation("flat", _, _, _), do: nil
+
+  defp liquidation(side, entry, bank, leverage) do
+    exposure = bank * leverage
+    loss_numerator = bank * entry - div(entry, 2)
+    distance = div(loss_numerator + exposure - 1, exposure)
+    trigger = if side == "up", do: entry - distance, else: entry + distance
+    if trigger in @min_mark..@max_mark, do: trigger
+  end
+
   defp account(s, id) do
     p = player(s, id)
+
+    balance = equity(p, s.mark)
+    active = liquidation(p.side, p.entry, p.bank, p.leverage)
+
+    quotes =
+      for side <- ["up", "down"], into: %{} do
+        triggers =
+          cond do
+            p.refill_at -> []
+            p.side == side -> List.duplicate(active, 50)
+            true -> Enum.map(1..50, &liquidation(side, s.mark, balance, &1))
+          end
+
+        {side, triggers}
+      end
 
     remaining =
       if p.refill_at do
@@ -242,7 +278,11 @@ defmodule Qiron.Market do
 
     %{
       side: p.side,
-      piss_coin: equity(p, s.mark) / 100,
+      piss_coin: balance / 100,
+      mark_cents: s.mark,
+      entry_cents: if(p.side != "flat", do: p.entry),
+      liquidation_cents: active,
+      quotes_cents: quotes,
       leverage: p.leverage,
       refill_in: remaining,
       seat: String.slice(id, 0, 6)
@@ -270,6 +310,7 @@ defmodule Qiron.Market do
       up: up,
       down: down,
       held: s.held,
+      volatility_bps: s.volatility_bps,
       layers: Display.layers(display)
     }
   end

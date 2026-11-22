@@ -7,6 +7,8 @@
 #include <SD.h>
 #include <strings.h>
 #include "scenes.h"
+#include "films.h"
+#include "film_assets.h"
 
 namespace {
 
@@ -55,6 +57,7 @@ struct Gif {
     AnimatedGIF decoder;
     File file;
 };
+DMAMEM films::Player<decltype(background)> film;
 Gif first;
 DMAMEM Gif second;
 Gif *live = &first, *spare = &second;
@@ -68,7 +71,7 @@ char exactFile[241], preparedFile[241];
 display::Mode mode = display::Mode::gif;
 display::Chart chart{};
 bool chartDirty;
-uint32_t modeStarted, lastIntro;
+uint32_t modeStarted;
 uint8_t preset = 4;
 bool sdReady, playing = true, cycling = true, decoding;
 uint32_t lastSelection, lastFrame, frameDelay;
@@ -290,7 +293,6 @@ void setMode(Mode next) {
     if (mode == next) return;
     mode = next;
     modeStarted = millis();
-    lastIntro = modeStarted - 60;
     closeGif();
     demoVisible = false;
     demo.setVisible(false);
@@ -299,6 +301,9 @@ void setMode(Mode next) {
     for (auto line : lines) line->setVisible(next == Mode::gif);
     chartDirty = true;
     if (next == Mode::gif) fill(black);
+    if (next == Mode::intro) film.start(introFilm);
+    if (next == Mode::crow) film.start(crowFilm);
+    if (next == Mode::beef) film.start(beefFilm);
 }
 
 void setChart(const Chart& value) {
@@ -499,30 +504,23 @@ void endTake() {
         scenes::blood(background, chart);
         chartDirty = false;
         pendingSwap = true;
-    } else if (mode == Mode::intro && millis() - lastIntro >= 60) {
-        lastIntro = millis();
-        scenes::intro(background, lastIntro - modeStarted);
-        pendingSwap = true;
     }
+    if (mode == Mode::intro || mode == Mode::crow || mode == Mode::beef)
+        pendingSwap = film.render(background, millis() - modeStarted);
     taking = false;
     if (pendingSwap) background.swapBuffers();
 }
 
 void tick() {
+    if (mode == Mode::intro || mode == Mode::crow || mode == Mode::beef) {
+        if (film.render(background, millis() - modeStarted)) background.swapBuffers();
+        return;
+    }
     if (mode == Mode::blood) {
         if (chartDirty) {
             scenes::blood(background, chart);
             background.swapBuffers(false);
             chartDirty = false;
-        }
-        return;
-    }
-    if (mode == Mode::intro) {
-        uint32_t now = millis();
-        if (now - lastIntro >= 60) {
-            scenes::intro(background, now-modeStarted);
-            background.swapBuffers(false);
-            lastIntro = now;
         }
         return;
     }

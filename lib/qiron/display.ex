@@ -53,7 +53,7 @@ defmodule Qiron.Display do
     end
   end
 
-  def change(d, {:mode, mode}) when mode in ["gif", "blood", "intro"],
+  def change(d, {:mode, mode}) when mode in ["gif", "blood", "intro", "crow", "beef"],
     do: {:ok, %{d | mode: mode}}
 
   def change(d, {:brightness, value}) when value in 0..255, do: {:ok, %{d | brightness: value}}

@@ -28,7 +28,27 @@ function signal(online) {
   document.body.classList.toggle("online", online);
   el("signal").textContent = online ? "LIVE FEED" : "RECONNECTING";
 }
+let latestAccount;
+const sideNames = { flat: "Flat", up: "Long", down: "Short" };
+
+function liquidation(cents) {
+  return cents == null ? "Outside range" : fmt(cents / 100);
+}
+
+function showQuotes() {
+  const lev = Number(el("leverage").value);
+  el("multiplier").value = lev + "×";
+  el("leverage").style.setProperty("--fill", ((lev - 1) * 100 / 49) + "%");
+  if (!latestAccount) return;
+  for (const side of ["up", "down"]) {
+    const quote = latestAccount.quotes_cents[side][lev - 1];
+    el(side + "-liq").textContent = latestAccount.refill_in === null ? liquidation(quote) : "—";
+  }
+}
+
 function account(data) {
+  latestAccount = data;
+  showQuotes();
   const busted = data.refill_in !== null;
   el("balance").textContent = fmt(data.piss_coin);
   el("refill").hidden = !busted;
@@ -41,8 +61,8 @@ function account(data) {
       : "Your next slug is ready.";
     el("receipt").textContent = "";
   }
-  el("side").textContent =
-    "POSITION · " + (data.side === "flat" ? "NONE" : data.side.toUpperCase() + " · " + data.leverage + "×");
+  el("side").textContent = data.side === "flat" ? "Flat" : sideNames[data.side] + " · " + data.leverage + "×";
+  el("active-liq").textContent = data.side === "flat" ? "" : "Liquidation · " + liquidation(data.liquidation_cents);
   el("close").hidden = data.side === "flat";
   for (const side of ["up", "down"]) {
     el(side).disabled = busy || busted || data.side === side;
@@ -97,7 +117,7 @@ async function command(payload, message, path = view === "audience" ? "trade" : 
   }
 }
 if (view === "audience") {
-  el("leverage").oninput = () => { el("multiplier").value = el("leverage").value + "×"; };
+  el("leverage").oninput = showQuotes;
   el("claim").onclick = () => command({}, "Slug received.", "refill");
   for (const side of ["up", "down", "flat"]) {
     el(side === "flat" ? "close" : side).onclick = () =>
@@ -105,7 +125,7 @@ if (view === "audience") {
         { side, leverage: Number(el("leverage").value) },
         side === "flat"
           ? "Position closed."
-          : "You called " + side + ". Eyes on the Chyron.",
+          : sideNames[side] + " opened.",
       );
   }
 }

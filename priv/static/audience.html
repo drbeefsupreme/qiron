@@ -1,74 +1,57 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Blood Futures · Too Late TV</title>
-    <link rel="stylesheet" href="/style.css" />
-    <script defer src="/app.js"></script>
-    <script defer src="/specimen.js"></script>
-  </head>
-  <body data-view="audience">
-    <header>
-      <div class="network"><i aria-hidden="true">▥</i> TOO LATE <b>TV</b></div>
-      <div class="feed"><em></em> <span id="signal">CONNECTING</span></div>
-    </header>
-    <main>
-      <section class="hero">
-        <div class="intro">
-          <div class="eyebrow">AUDIENCE EXCHANGE</div>
-          <h1>
-            Blood<br /><strong>Futures<span>.</span></strong>
-          </h1>
-          <p>Trade the value of the blood of Dr. Crow’s unborn child.</p>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c0d0d">
+  <title>Blood Futures · Too Late TV</title>
+  <link rel="stylesheet" href="/exchange.css">
+  <script defer src="/app.js"></script>
+</head>
+<body data-view="audience">
+  <header class="mast">
+    <a class="brand" href="https://toolate.tv/" aria-label="Too Late TV"><i class="tv" aria-hidden="true"></i> TOO LATE<span>.TV</span></a>
+    <span class="connection"><i aria-hidden="true"></i><span id="signal">Connecting</span></span>
+  </header>
+  <main>
+    <section class="poster" aria-labelledby="title">
+      <div class="screenprint" aria-hidden="true"></div>
+      <div class="horizon" aria-hidden="true"></div>
+      <div class="heading">
+        <p class="contract"><i aria-hidden="true"></i> Perpetual contract</p>
+        <h1 id="title"><span>Blood</span> <strong>Futures</strong></h1>
+      </div>
+      <figure class="crow"><div class="scope" aria-hidden="true"></div><img src="/dr-crow.gif" width="96" height="96" alt="Pixel portrait of Dr. Crow wearing silver claw glasses"><figcaption>Dr. Crow</figcaption></figure>
+      <i class="flare f1" aria-hidden="true"></i><i class="flare f2" aria-hidden="true"></i>
+    </section>
+    <section class="desk" aria-label="Trading controls">
+      <div class="wallet">
+        <h2>Balance</h2>
+        <strong id="balance">—</strong>
+        <span class="currency"><i aria-hidden="true">₱</i> PISS COIN</span>
+        <div class="wallet-pattern" aria-hidden="true"></div>
+      </div>
+      <div class="order">
+        <label for="leverage" class="lev-label">Leverage <output id="multiplier" for="leverage">1×</output></label>
+        <input aria-label="Leverage" id="leverage" type="range" min="1" max="50" step="1" value="1" disabled>
+        <div class="scale" aria-hidden="true"><span>1×</span><span>25×</span><span>50×</span></div>
+        <div class="calls">
+          <button type="button" class="call long" id="up" disabled>
+            <span class="call-name">Long <i aria-hidden="true">↗</i></span>
+            <span class="threshold"><span>Liquidation</span><b id="up-liq">—</b></span>
+          </button>
+          <button type="button" class="call short" id="down" disabled>
+            <span class="call-name">Short <i aria-hidden="true">↘</i></span>
+            <span class="threshold"><span>Liquidation</span><b id="down-liq">—</b></span>
+          </button>
         </div>
-        <figure>
-          <div class="plate">
-            <canvas
-              id="specimen"
-              width="260"
-              height="170"
-              aria-label="Pixel illustration of a blood droplet"
-            ></canvas>
-          </div>
-          <figcaption><span>FIG. 01</span> CROW BLOOD SPECIMEN</figcaption>
-        </figure>
+      </div>
+      <section class="position" aria-label="Current position">
+        <h2>Position</h2><strong id="side">—</strong><span id="active-liq"></span><button type="button" id="close" hidden>Close position</button>
       </section>
-      <section class="ticket">
-        <div class="tickethead">
-          <h2>Call the market</h2>
-          <small id="side">YOUR POSITION · …</small>
-        </div>
-        <p>Pick a direction. Watch the Chyron for the price.</p>
-        <label class="leverage" for="leverage">Next trade leverage
-          <output id="multiplier" for="leverage">1×</output>
-          <input id="leverage" type="range" min="1" max="50" step="1" value="1">
-        </label>
-        <div class="buttons">
-          <button id="up" disabled><i>↗</i> I think it will go up</button
-          ><button id="down" disabled><i>↘</i> I think it will go down</button>
-        </div>
-        <p role="status" id="receipt"></p>
-        <div class="account">
-          <div><small>PISS COIN</small><b id="balance">…</b></div>
-          <button id="close" hidden>Close position</button>
-        </div>
-        <div id="refill" hidden>
-          <p id="cooldown"></p>
-          <button id="claim" disabled>Claim 50,000 PISS COIN</button>
-        </div>
-      </section>
-      <details>
-        <summary>How the trade works</summary>
-        <p>
-          Start with 50,000 PISS COIN. Each call uses your balance. At 1×, a 1% move changes
-          your balance by 1%. At 50×, a 2% move against you wipes it out.
-          Close to bank the result, or switch direction to open a new trade at your selected leverage.
-          If you hit zero, wait five minutes to claim another slug.
-        </p>
-      </details>
-      <p id="error" role="alert"></p>
-    </main>
-    <footer>TOO LATE SHOW <span>◆</span> CROWNET TERMINAL</footer>
-  </body>
+      <div id="refill" hidden><p id="cooldown"></p><button id="claim" disabled>Claim 50,000 PISS COIN</button></div>
+    </section>
+    <p role="status" class="sr" id="receipt"></p><p role="alert" id="error"></p>
+  </main>
+</body>
 </html>

@@ -40,9 +40,13 @@ with tempfile.TemporaryDirectory() as work:
                     assert usb.read(1) + usb.read(1) == bytes([254, 0 if accepted else 1])
 
                 chart = struct.pack("<7I", 12300, 92, 4, 10100, 12500, 9900, 12300)
-                for mode in (0, 1, 2):
+                for mode in (0, 1, 2, 3, 4):
                     send(37, bytes([mode]))
-                send(37, bytes([3]), False)
+                send(37, bytes([5]), False)
+                for mode in (3, 4):
+                    send(40, bytes([mode]))
+                    send(41, bytes([12, 100]))
+                    send(42, b"")
                 send(38, chart)
                 send(38, chart[:-1], False)
                 send(38, struct.pack("<7I", 10000, 0, 0, 10000, 9000, 8500, 9200), False)
@@ -78,7 +82,9 @@ with tempfile.TemporaryDirectory() as work:
         events.seek(0)
         assert events.read().splitlines() == [
             b"start 0 -1 " + TEXT, b"effect 36", b"speed 0 255", b"brightness 32",
-            b"mode 0", b"mode 1", b"mode 2", b"chart 12300 92 4 1 12300",
+            b"mode 0", b"mode 1", b"mode 2", b"mode 3", b"mode 4",
+            b"beginTake", b"mode 3", b"brightness 100", b"endTake",
+            b"beginTake", b"mode 4", b"brightness 100", b"endTake", b"chart 12300 92 4 1 12300",
             b"chart 10400 1 4 1 10400", b"beginTake", b"mode 1", b"chart 12300 92 4 1 12300", b"endTake",
             b"prepare preset 0", b"beginTake", b"mode 0", b"source 0 /gifs/joker/caw.gif 1",
             b"speed 0 42", b"start 0 -1 SHOW", b"effect 17", b"brightness 90", b"endTake",

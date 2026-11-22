@@ -32,6 +32,10 @@
           <span id="draft-status" role="status">Loading draft…</span>
           <button id="discard-edits" type="button" hidden>Discard unsaved edits</button>
         </div>
+        <div class="portrait-takes" role="group" aria-label="Live portraits">
+          <button type="button" id="take-crow" data-portrait="crow" disabled>Take Dr. Crow live</button>
+          <button type="button" id="take-beef" data-portrait="beef" disabled>Take Dr. Beef Supreme live</button>
+        </div>
         <p id="panel-error" role="status"></p>
         <a class="preview-link" href="/stage" target="_blank" rel="noopener">Open stage display ↗</a>
       </section>
@@ -59,6 +63,12 @@
           <b id="mark">…</b>
         </div>
         <p id="marketmeta"></p>
+        <div class="setting">
+          <label for="volatility">Volatility · maximum move per 2 seconds
+            <output for="volatility" id="volatility-label">±0.50%</output>
+          </label>
+          <input id="volatility" type="range" min="0" max="500" step="1" value="50" disabled>
+        </div>
         <div class="controls">
           <button data-nudge="-1">Lower 5%</button
           ><button data-nudge="1">Raise 5%</button

@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 namespace display {
-enum class Mode : uint8_t { gif, blood, intro };
+enum class Mode : uint8_t { gif, blood, intro, crow, beef };
 struct Candle { uint32_t open, high, low, close; };
 struct Chart {
     uint32_t mark, bullish, bearish;

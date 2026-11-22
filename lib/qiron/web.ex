@@ -7,7 +7,8 @@ defmodule Qiron.Web do
   plug(Plug.Static,
     at: "/",
     from: {:qiron, "priv/static"},
-    only: ~w(style.css app.js specimen.js booth.js stage.js telethon.gif)
+    only:
+      ~w(style.css exchange.css app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif archivo-black.ttf barlow-condensed.ttf)
   )
 
   plug(:match)
@@ -48,8 +49,15 @@ defmodule Qiron.Web do
   post "/api/operator" do
     command =
       case conn.body_params do
+        %{"portrait" => mode, "revision" => rev}
+        when mode in ["crow", "beef"] and is_integer(rev) ->
+          {:portrait, mode, rev}
+
         %{"hold" => held} ->
           {:hold, held}
+
+        %{"volatility_bps" => value} when value in 0..500 ->
+          {:volatility_bps, value}
 
         %{"nudge" => dir} ->
           {:nudge, dir}
@@ -84,7 +92,7 @@ defmodule Qiron.Web do
 
     result =
       case command do
-        {kind, _} when kind in [:mark, :nudge, :hold] -> Market.call(command)
+        {kind, _} when kind in [:mark, :nudge, :hold, :volatility_bps] -> Market.call(command)
         :invalid -> :invalid
         other -> Qiron.Panel.command(other)
       end

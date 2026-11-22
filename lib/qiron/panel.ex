@@ -1,7 +1,7 @@
 defmodule Qiron.Panel do
   use GenServer
   alias Qiron.{Display, Market}
-  @modes %{"gif" => 0, "blood" => 1, "intro" => 2}
+  @modes %{"gif" => 0, "blood" => 1, "intro" => 2, "crow" => 3, "beef" => 4}
   defstruct port: nil,
             job: nil,
             prepared: nil,
@@ -42,31 +42,26 @@ defmodule Qiron.Panel do
      }), s}
   end
 
-  def handle_call({:command, {:take, rev}}, _, s) do
-    draft = Market.call(:panel)
+  def handle_call({:command, {:take, rev}}, _, s), do: take(rev, s)
 
-    cond do
-      rev !== draft.revision ->
-        {:reply, :stale, s}
+  def handle_call({:command, {:portrait, mode, rev}}, _, s) when mode in ["crow", "beef"] do
+    if Market.call(:panel).revision == rev do
+      :ok = Market.call({:mode, mode})
+      draft = Market.call(:panel)
+      s = %{s | job: nil, prepared: nil, failed: nil, staged_chart: nil}
 
-      !draft.dirty ->
-        {:reply, :ok, s}
+      if s.port do
+        fields = scene(draft, nil)
 
-      !s.port ->
-        {:reply, Market.call({:take, rev}), s}
-
-      s.prepared != rev ->
-        {:reply, :not_ready, s}
-
-      true ->
-        case transmit(s, {42, ""}) do
-          {:ok, s} ->
-            :ok = Market.call({:take, rev})
-            {:reply, :ok, %{s | restore: :done, prepared: nil, last_chart: nil, failed: nil}}
-
-          {reason, s} ->
-            {:reply, reason, failure(s, {:draft, rev}, reason)}
+        case prepare_now(fields, s, draft.revision) do
+          {:ok, s} -> take(draft.revision, s)
+          {reason, s} -> {:reply, reason, s}
         end
+      else
+        take(draft.revision, s)
+      end
+    else
+      {:reply, :stale, s}
     end
   end
 
@@ -146,6 +141,43 @@ defmodule Qiron.Panel do
   def handle_info({port, {:exit_status, _}}, %{port: port} = s), do: {:noreply, disconnect(s)}
   def handle_info(_, s), do: {:noreply, s}
 
+  defp take(rev, s) do
+    draft = Market.call(:panel)
+
+    cond do
+      rev !== draft.revision ->
+        {:reply, :stale, s}
+
+      !draft.dirty and s.prepared != rev ->
+        {:reply, :ok, s}
+
+      !s.port ->
+        {:reply, Market.call({:take, rev}), s}
+
+      s.prepared != rev ->
+        {:reply, :not_ready, s}
+
+      true ->
+        case transmit(s, {42, ""}) do
+          {:ok, s} ->
+            :ok = Market.call({:take, rev})
+            {:reply, :ok, %{s | restore: :done, prepared: nil, last_chart: nil, failed: nil}}
+
+          {reason, s} ->
+            {:reply, reason, failure(s, {:draft, rev}, reason)}
+        end
+    end
+  end
+
+  defp prepare_now([], s, rev), do: {:ok, %{s | prepared: rev}}
+
+  defp prepare_now([frame | rest], s, rev) do
+    case transmit(s, frame) do
+      {:ok, s} -> prepare_now(rest, s, rev)
+      {reason, s} -> {reason, failure(s, {:draft, rev}, reason, frame)}
+    end
+  end
+
   defp plan(%{port: nil} = s, _), do: s
 
   defp plan(s, draft) do
@@ -207,7 +239,7 @@ defmodule Qiron.Panel do
         "blood" ->
           [chart(data)]
 
-        "intro" ->
+        mode when mode in ["intro", "crow", "beef"] ->
           []
       end
 

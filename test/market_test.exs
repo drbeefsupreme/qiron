@@ -35,6 +35,49 @@ defmodule Qiron.MarketTest do
   end
 
   @tag :tmp_dir
+  test "quoted liquidation matches settlement, side switches, and limits", %{tmp_dir: dir} do
+    pid = start_supervised!({Market, path: Path.join(dir, "show"), tick: false})
+    call = &Market.call(&1, pid)
+    flat = call.({:account, "seat"})
+    assert flat.liquidation_cents == nil
+    assert flat.entry_cents == nil
+    assert flat.mark_cents == 10_000
+    assert Enum.at(flat.quotes_cents["up"], 0) == nil
+    assert Enum.at(flat.quotes_cents["up"], 2) == 6666
+    assert Enum.at(flat.quotes_cents["down"], 2) == 13_334
+    assert %{liquidation_cents: 6666, entry_cents: 10_000} = call.({:trade, "seat", "up", 3})
+
+    call.({:mark, 6667})
+    before_switch = call.({:account, "seat"})
+    assert before_switch.side == "up"
+    assert Enum.uniq(before_switch.quotes_cents["up"]) == [6666]
+    next_trigger = Enum.at(before_switch.quotes_cents["down"], 49)
+    assert %{liquidation_cents: ^next_trigger} = call.({:trade, "seat", "down", 50})
+    call.({:mark, next_trigger - 1})
+    assert call.({:account, "seat"}).side == "down"
+    call.({:mark, next_trigger})
+    assert %{side: "flat", quotes_cents: %{"up" => [], "down" => []}} = call.({:account, "seat"})
+
+    call.({:mark, 1_000_000})
+    assert Enum.uniq(call.({:account, "new"}).quotes_cents["down"]) == [nil]
+  end
+
+  @tag :tmp_dir
+  test "liquidation quote reflects cent rounding on a nearly exhausted seat", %{tmp_dir: dir} do
+    path = Path.join(dir, "show")
+    seat = %{side: "flat", bank: 1, entry: 10_000, leverage: 1, refill_at: nil}
+    File.write!(path, :erlang.term_to_binary(%Market{players: %{"seat" => seat}}))
+    pid = start_supervised!({Market, path: path, tick: false})
+    call = &Market.call(&1, pid)
+    assert Enum.at(call.({:account, "seat"}).quotes_cents["up"], 49) == 9900
+    assert %{liquidation_cents: 9900} = call.({:trade, "seat", "up", 50})
+    call.({:mark, 9901})
+    assert %{side: "up", piss_coin: 0.01} = call.({:account, "seat"})
+    call.({:mark, 9900})
+    assert %{side: "flat", piss_coin: +0.0} = call.({:account, "seat"})
+  end
+
+  @tag :tmp_dir
   test "a saved seat can claim one slug after its five-minute wait", %{tmp_dir: dir} do
     path = Path.join(dir, "show")
 

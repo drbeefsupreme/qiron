@@ -1,17 +1,22 @@
 "use strict";
-const modeNames = {gif: "GIF", blood: "Blood Futures", intro: "Introduction"};
+const modeNames = {gif: "GIF", blood: "Blood Futures", intro: "Introduction", crow: "Dr. Crow", beef: "Dr. Beef Supreme"};
 const gifDirectories = {gifK: "koyaanisqatsi", gifO: "obama", gifF: "flag", gifD: "drugs", gifJ: "joker", gifS: "spooky", gifB: "subgenius", gifT: "transparent", gifA: "aj", gifP: "blue", gifH: "hank"};
 const edits = new Map();
-let draft, timer, writeTask, failedEdit, switching = false;
+let draft, timer, writeTask, failedEdit, portraitTake, switching = false;
 
 function draftStatus() {
   if (!draft) return;
   const offline = draft.readiness === "offline";
   const statuses = {ready: "Draft preloaded on panel.", loading: "Preloading panel…", error: "Panel could not prepare this draft.", offline: "Panel offline · browser stage only."};
   el("discard-edits").hidden = !failedEdit;
-  el("draft-status").textContent = failedEdit ? "Draft has unsaved changes." : writeTask || edits.size ? "Saving draft…" :
+  el("draft-status").textContent = portraitTake ? "Taking " + modeNames[portraitTake] + " live…" : failedEdit ? "Draft has unsaved changes." : writeTask || edits.size ? "Saving draft…" :
     (!draft.dirty ? "Draft matches live. " : "") + (statuses[draft.readiness] || "");
   el("take-live").disabled = switching || !!writeTask || edits.size > 0 || !draft.dirty || !(offline || draft.ready);
+  for (const button of document.querySelectorAll("[data-portrait]")) {
+    button.disabled = switching || !!writeTask || edits.size > 0;
+  }
+  el("brightness").disabled = !!portraitTake;
+  el("gif-controls").inert = !!portraitTake;
   for (const button of document.querySelectorAll("[data-mode]")) {
     button.disabled = switching;
     button.setAttribute("aria-pressed", String(draft.mode === button.dataset.mode));
@@ -100,8 +105,20 @@ function layerFields(layer) {
   el("layers").append(group);
 }
 
+let editingVolatility = false;
+function showVolatility(bps) {
+  const value = "±" + (bps / 100).toFixed(2) + "%";
+  el("volatility-label").value = value;
+  el("volatility").setAttribute("aria-valuetext", value + " per two seconds");
+}
+
 function renderBooth(data) {
   draft = data;
+  if (!editingVolatility && !el("volatility").matches(":active")) {
+    el("volatility").disabled = false;
+    el("volatility").value = data.volatility_bps;
+    showVolatility(data.volatility_bps);
+  }
   el("on-air").textContent = "On air · " + modeNames[data.live_mode];
   el("panel-status").textContent = "USB " + data.status;
   el("panel-error").textContent = data.error || "";
@@ -134,6 +151,27 @@ function renderBooth(data) {
 }
 
 function initBooth() {
+  const volatility = el("volatility");
+  volatility.oninput = () => {
+    showVolatility(volatility.valueAsNumber);
+  };
+  volatility.onchange = async () => {
+    editingVolatility = true;
+    const focused = document.activeElement === volatility;
+    volatility.disabled = true;
+    ++version;
+    el("error").textContent = "";
+    try {
+      await api("operator", {volatility_bps: volatility.valueAsNumber});
+    } catch (error) {
+      el("error").textContent = error.message;
+    } finally {
+      editingVolatility = false;
+      volatility.disabled = false;
+      if (focused && document.activeElement === document.body) volatility.focus({preventScroll: true});
+      await refresh();
+    }
+  };
   for (const [id, directory] of Object.entries(gifDirectories))
     el("gif-preset").add(new Option("/gifs/" + directory, id));
   const gifEdit = () => edit("gif", {gif: {preset: el("gif-preset").value, file: el("gif-file").value}});
@@ -155,6 +193,25 @@ function initBooth() {
       await saveDraft(() => api("operator", {mode: button.dataset.mode}));
       switching = false;
       draftStatus();
+    };
+  }
+  for (const button of document.querySelectorAll("[data-portrait]")) {
+    button.onclick = async () => {
+      const revision = draft.revision;
+      const mode = button.dataset.portrait;
+      switching = true;
+      portraitTake = mode;
+      el("receipt").textContent = "";
+      try {
+        await saveDraft(async () => {
+          await api("operator", {portrait: mode, revision});
+          el("receipt").textContent = modeNames[mode] + " taken live.";
+        });
+      } finally {
+        portraitTake = null;
+        switching = false;
+        draftStatus();
+      }
     };
   }
   el("discard-edits").onclick = async () => {

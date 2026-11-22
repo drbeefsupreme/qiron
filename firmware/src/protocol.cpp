@@ -151,7 +151,7 @@ static bool dispatch() {
     if (method == 41) return draft.ready && field(payload[0], payload+1, length-1, true);
     if (method == 42) return take();
     if (method == 37 || method == 40) {
-        if (payload[0] > static_cast<uint8_t>(display::Mode::intro)) return false;
+        if (payload[0] > static_cast<uint8_t>(display::Mode::beef)) return false;
         auto mode = static_cast<display::Mode>(payload[0]);
         if (method == 37) display::setMode(mode);
         else {

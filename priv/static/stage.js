@@ -1,5 +1,5 @@
 "use strict";
-const stageTitles = {gif: "GIF mode", blood: "Blood Futures", intro: "Christmas Telethon"};
+const stageTitles = {gif: "GIF mode", blood: "Blood Futures", intro: "Christmas Telethon", crow: "Dr. Crow", beef: "Dr. Beef Supreme"};
 let activeMode;
 
 function renderStage(data) {
@@ -8,10 +8,12 @@ function renderStage(data) {
     for (const mode of Object.keys(stageTitles))
       el("stage-" + mode).hidden = mode !== activeMode;
     el("stage-title").textContent = stageTitles[activeMode];
-    if (activeMode === "intro") {
-      el("intro-screen").src = "/telethon.gif?start=" + Date.now();
-    } else {
-      el("intro-screen").removeAttribute("src");
+    for (const img of document.querySelectorAll(".stage-animation")) {
+      if (img.parentElement.id === "stage-" + activeMode) {
+        img.src = img.dataset.file + "?start=" + Date.now();
+      } else {
+        img.removeAttribute("src");
+      }
     }
   }
   if (activeMode === "gif") {

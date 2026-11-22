@@ -1,6 +1,6 @@
 # Qiron
 
-The Too Late Show audience calls the price of Dr. Crow’s unborn child’s blood. Give the audience the root URL and put `/stage` on the venue screen. Doctor Beef Supreme runs the show from `/operator`.
+The Too Late Show audience calls the price of Dr. Crow’s unborn child’s blood. Give the audience the root URL. Open `/stage` for an optional browser monitor or projector feed. The physical QYRON runs directly from the Pi with the stage tab closed. Doctor Beef Supreme runs the show from `/operator`.
 
 ## Run a rehearsal
 
@@ -20,13 +20,15 @@ The password prompt above uses zsh. In Bash use `read -rs -p 'Booth password: ' 
 3. Prepare **GIF**, choose a folder or enter a full SD path such as `/gifs/joker/hotline.gif`, and type the five scrolls. You can also set their speeds, brightness and an optional feature line or effect. Take the cue when you want those changes on air. The browser stage shows the overlay text and identifies the SD selection. The Teensy plays the SD file.
 4. Prepare and take **Blood Futures**. Hold the drift and set the mark to 100. Open two audience seats in separate browser profiles and call opposite directions at 1×. Set the mark to 110. The stage shows the price, candles, one bull and one bear. The seats show 55,000 and 45,000 PISS COIN.
 
-The 24-second Introduction loop draws four scenes on the LEDs: a ringing CAW-IN switchboard, the PISS COIN mint, a North Pole tracker following an off-route reindeer, and Crow’s overloaded data feed dissolving into Christmas television snow. The browser plays an animation generated from the same firmware drawing code. To regenerate it after changing the artwork, build the firmware and run `bash firmware/preview/render.sh` on a machine with a C++ compiler and FFmpeg.
+The booth also has two one-click portrait takes, **Dr. Crow** and **Dr. Beef Supreme**. Each plays a ten-second idle loop. To return to a show cue, select its mode and take it live.
+
+The 24-second Introduction places Crow, Beef, Peter Thiel and Santa against the poster’s ochre jungle and falling petals. The CAW-IN and Santa Tracker sequences return to an ensemble Christmas Telethon title. The Teensy plays the intro and the two booth portraits directly from flash. The browser stage uses the same GIFs. To regenerate the intro from its source art, run `python3 art/telethon.py` with Pillow installed before building the firmware.
 
 ## Game rules
 
-Each seat starts with 50,000 PISS COIN. Each position uses the full seat balance at the chosen leverage (1× through 50×, default 1×). At 10×, a 1% move in your direction earns 10% of the entry balance. Repeating the same call keeps its entry and leverage. Switching sides settles the old position first. A balance of zero closes the position and starts a five-minute cooldown. The seat can then claim another 50,000 PISS COIN. The cooldown and balances survive server restarts. When upgrading an old snapshot, the server settles open positions at the saved mark under the old rules and converts each old credit into 50 PISS COIN.
+Each seat starts with 50,000 PISS COIN. Each position uses the full seat balance at the chosen leverage (1× through 50×, default 1×). At 10×, a 1% move in your direction earns 10% of the entry balance. Each Long or Short button shows the liquidation price for that call. “Outside range” means the mark cannot reach the threshold under the show’s price limits. An open position keeps its entry and leverage until closed or flipped. Switching sides settles the old position first. A balance of zero closes the position and starts a five-minute cooldown. The seat can then claim another 50,000 PISS COIN. The cooldown and balances survive server restarts. When upgrading an old snapshot, the server settles open positions at the saved mark under the old rules and converts each old credit into 50 PISS COIN.
 
-The mark starts at 100.00 and drifts by up to 0.5% every two seconds within a range of 1.00 to 10,000.00. The booth can hold the drift, move the mark by 5%, or set it directly. The audience sees its position and PISS COIN balance. The stage carries the shared price.
+The mark starts at 100.00 and moves every two seconds within a range of 1.00 to 10,000.00. In the operator booth, Volatility sets the largest random move per tick, from ±0% to ±5%. The default is ±0.5%. The setting applies on the next unheld tick and survives a restart. The booth can hold the drift, move the mark by 5%, or set it directly. The audience sees its position and PISS COIN balance. The stage carries the shared price.
 
 ## Run on a show server
 
@@ -78,7 +80,7 @@ The Pi and Teensy use one framed binary protocol over USB serial. Flash the new 
 | 6–11 | Set scroll speed on the corresponding layer | One byte |
 | 12 | Set brightness | One byte |
 | 13–36 | Demo, shapes, pixels, backgrounds, blink, GIF controls and presets, clear loops | Empty |
-| 37 | Activate mode directly | One byte: 0 = GIF, 1 = Blood Futures, 2 = Introduction |
+| 37 | Activate mode directly | One byte: 0 = GIF, 1 = Blood Futures, 2 = Introduction, 3 = Dr. Crow, 4 = Dr. Beef Supreme |
 | 38 | Update Blood Futures | Little-endian uint32 mark in cents, bulls, bears, then 1–24 OHLC tuples in cents, oldest first |
 | 39 | Loop a specific SD GIF | Full path under the selected `/gifs/` folder, up to 240 bytes |
 | 40 | Begin a new staged scene | Mode byte |
@@ -105,6 +107,8 @@ Run the firmware parser integration check on Linux with Python 3 and a C++17 com
 ```sh
 python3 firmware/integration/usb.py
 ```
+
+After building the firmware, run `python3 firmware/integration/films.py` with Pillow installed. This exercises the firmware GIF decoder and compares its 128 × 96 output against the source animations through each loop boundary.
 
 ## First physical test
 

@@ -397,7 +397,8 @@ a {
 .leverage output { font-weight: bold; }
 .leverage input { grid-column: 1 / -1; width: 100%; accent-color: var(--red); }
 
-.modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.portrait-takes { margin-top: 1em; }
+.portrait-takes, .modes { display: flex; flex-wrap: wrap; gap: 6px; }
 .modes button[aria-pressed="true"] { background: #242525; color: white; }
 .setting, .settings { margin: 1em 0; }
 .settings { display: flex; flex-wrap: wrap; align-items: end; gap: 1em; }
@@ -414,8 +415,10 @@ a {
 #stage-title { color: inherit; }
 .quote { display: flex; flex-wrap: wrap; gap: 2em; }
 .quote b { display: block; }
-.chart canvas, #intro-screen { width: 100%; height: auto; display: block; image-rendering: pixelated; background: #111a20; }
-#intro-screen { max-width: min(100%, 95vh); margin-inline: auto; }
+.chart canvas, .stage-animation { width: 100%; height: auto; display: block; image-rendering: pixelated; background: #111a20; }
+.stage-animation { max-width: min(100%, 95vh); margin-inline: auto; }
+.stage-portrait { max-width: min(100%, 95vh); margin-inline: auto; background: #000; }
+.stage-portrait img { width: 75%; background: #000; }
 .chart { padding: 12px; background: #151d1d; color: #cddbd0; }
 .chart figcaption { border: 0; }
 [hidden] { display: none !important; }
