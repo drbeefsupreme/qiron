@@ -74,13 +74,25 @@ with tempfile.TemporaryDirectory() as work:
                     for field in fields:
                         send(41, bytes([field]))
                     send(42, b"")
+                send(44, bytes([0,0,14]), False)
+                send(48, b"X"*240)
+                send(48, "é📺".encode())
+                for bad in [b"", b"X"*241, b"A\0B", b"\xc0\x80", b"\xed\xa0\x80", b"\xf4\x90\x80\x80", b"\xe2\x82"]:
+                    send(48, bad, False)
+                send(40, bytes([0]))
+                send(41, bytes([48]) + b"SAMPLE", False)
+                send(40, bytes([1]))
+                send(41, bytes([44,0,0,1,14]))
+                send(41, bytes([38]) + chart)
+                send(41, bytes([48]) + b"SAMPLE")
+                send(42, b"")
                 quotes = struct.pack("<6I", 0, 5, 48, 7816, 255, 4294967295)
                 send(43, quotes)
                 send(43, quotes[:-1], False)
                 send(43, quotes + b"x", False)
-                send(44, bytes([0, 100, *range(14)]))
-                for layout in ([0], [0, 0, 14], [0, 0, 5, 5], [101, 0], [0, 101],
-                               [0, 0, *range(15)]):
+                send(44, bytes([0, 100, *range(15)]))
+                for layout in ([0], [0, 0, 15], [0, 0, 5, 5], [101, 0], [0, 101],
+                               [0, 0, *range(16)]):
                     send(44, bytes(layout), False)
                 send(45, bytes([101, 0]), False)
                 send(45, bytes([0, 101]), False)
@@ -92,7 +104,7 @@ with tempfile.TemporaryDirectory() as work:
                     send(41, bytes([44, 0, 0, *layout]))
                     send(41, bytes(field), False)
                     send(42, b"", False)
-                for widget in (1, 7):
+                for widget in (1, 7, 14):
                     send(40, bytes([0]))
                     send(41, bytes([44, 0, 0, widget]))
                     send(42, b"", False)
@@ -108,7 +120,18 @@ with tempfile.TemporaryDirectory() as work:
                 send(41, bytes([1]) + struct.pack("<i", -1) + b"SCROLL")
                 send(43, bytes(24))
                 send(45, bytes([100, 0]))
+                for command, payload in [(46, bytes([2,1])), (46, bytes([3,0,0,0,0])), (47, b""), (47, bytes([1]))]:
+                    send(command, payload, False)
+                send(46, struct.pack("<BI",1,0x87654321))
+                send(47, bytes([60]))
+                send(46, struct.pack("<BI",2,0))
+                send(47, bytes([5]))
+                send(47, bytes([0]))
                 send(42, b"")
+                for method, payload in [(46, struct.pack("<BI",2,18)), (47, bytes([5]))]:
+                    send(40, bytes([0]))
+                    send(41, bytes([method]) + payload, False)
+                    send(42, b"", False)
         finally:
             os.close(slave)
             os.close(master)
@@ -126,9 +149,10 @@ with tempfile.TemporaryDirectory() as work:
             b"beginTake", b"mode 0", b"source 1  1", b"endTake",
             b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake",
             b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake",
-            b"quotes 0 5 48 7816 255 4294967295", b"stack 0 100 0 1 2 3 4 5 6 7 8 9 10 11 12 13",
+            b"join 240", b"join 2", b"beginTake", b"mode 1", b"stack 0 0 1 14", b"chart 12300 92 4 1 12300", b"join 6", b"endTake",
+            b"quotes 0 5 48 7816 255 4294967295", b"stack 0 100 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14",
             b"beginTake", b"mode 1", b"stack 0 100", b"endTake",
-            b"quotes 0 0 0 0 0 0", b"fx 100 0", b"beginTake", b"mode 4",
+            b"quotes 0 0 0 0 0 0", b"fx 100 0", b"burst 1 2271560481", b"splice 60", b"burst 2 0", b"splice 5", b"splice 0", b"beginTake", b"mode 4",
             b"stack 10 20 0 5 6 9 1 7", b"source -1 /gifs/joker/caw.gif 0",
             b"chart 12300 92 4 1 12300", b"quotes 0 5 48 7816 255 4294967295",
             b"speed 1 42", b"start 1 -1 SCROLL", b"endTake"

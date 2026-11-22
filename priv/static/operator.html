@@ -19,53 +19,69 @@
     <main>
       <div class="eyebrow">DOCTOR BEEF SUPREME</div>
       <h1>Operator booth<span>.</span></h1>
-      <section class="ticket">
-        <div class="tickethead"><h2>Prepare QYRON</h2><b id="panel-status">Connecting…</b></div>
-        <p id="on-air">On air · …</p>
-        <div class="modes" role="group" aria-label="Draft display mode">
-          <button id="mode-gif" data-mode="gif" aria-pressed="false" disabled>GIF</button>
-          <button id="mode-blood" data-mode="blood" aria-pressed="false" disabled>Blood Futures</button>
-          <button id="mode-intro" data-mode="intro" aria-pressed="false" disabled>Introduction</button>
-        </div>
-        <p id="intro-info" hidden>Christmas Telethon · 24-second continuous loop</p>
-        <p id="blood-info" hidden>Live oracle mark, 10-second candles and open bullish and bearish positions.</p>
-        <div id="mixer">
+      <div class="booth-console">
+        <aside class="preset-sidebar">
+          <h2 id="stacks-heading">Saved stacks</h2>
+          <div id="preset-rail" role="group" aria-labelledby="stacks-heading" tabindex="-1"></div>
           <section class="mix-monitor">
             <div class="mix-label"><h3>Draft monitor</h3><span>128 × 96</span></div>
             <canvas id="draft-canvas" width="128" height="96" aria-label="Animated draft scene"></canvas>
             <p id="sd-preview" hidden>SD footage plays on the physical panel.</p>
-            <div class="mix-faders">
-              <label>Melt <output id="melt-value" for="melt">0%</output><input id="melt" type="range" min="0" max="100" value="0"></label>
-              <label>Hue shift <output id="hue-value" for="hue">0%</output><input id="hue" type="range" min="0" max="100" value="0"></label>
-            </div>
+            <p id="draft-status" role="status">Loading draft…</p>
           </section>
-          <section class="mix-stack">
-            <div class="mix-label"><h3>Widget stack</h3><span>Back → front</span></div>
-            <ol id="widget-stack"></ol>
-            <div class="mix-add"><select id="widget-choice" aria-label="Widget to add"></select><button type="button" id="add-widget">Add to front</button></div>
-            <label id="gif-source-label" for="gif-source">GIF mode background<select id="gif-source"></select></label>
-          </section>
-        </div>
-        <div class="setting"><label>Brightness (0–255)<input id="brightness" type="number" min="0" max="255" required></label></div>
-        <div class="take-bar">
-          <button type="button" id="take-live" aria-keyshortcuts="Alt+Enter" disabled>Take live <kbd>Alt+Enter</kbd></button>
-          <span id="draft-status" role="status">Loading draft…</span>
+        </aside>
+        <section class="ticket booth-panel">
+          <div class="tickethead">
+            <h2>Edit stack</h2>
+            <b id="panel-status">Connecting…</b>
+          </div>
+          <div id="mixer">
+            <section class="mix-stack">
+              <div class="mix-label"><h3>Widgets</h3><span>Back → front</span></div>
+              <label class="banner-toggle"><input id="join-enabled" type="checkbox">Audience join banner</label>
+              <ol id="widget-stack"></ol>
+              <div class="mix-add"><select id="widget-choice" aria-label="Widget to add"></select><button type="button" id="add-widget">Add to front</button></div>
+              <label id="gif-source-label" for="gif-source">GIF mode background<select id="gif-source"></select></label>
+              <div class="mix-faders">
+                <label>Melt <output id="melt-value" for="melt">0%</output><input id="melt" type="range" min="0" max="100" value="0"></label>
+                <label>Hue shift <output id="hue-value" for="hue">0%</output><input id="hue" type="range" min="0" max="100" value="0"></label>
+              </div>
+            </section>
+          </div>
+          <form id="save-stack-form">
+            <label for="stack-name">Stack name<input id="stack-name" required autocomplete="off"></label>
+            <button id="save-stack" type="submit" disabled>Save as new</button>
+          </form>
           <button id="discard-edits" type="button" hidden>Discard unsaved edits</button>
-        </div>
-        <div class="live-fx">
-          <div><h3>On-air effects</h3><span id="live-fx-status"></span></div>
-          <button type="button" id="melt-live" disabled>Melt live</button>
-          <button type="button" id="clear-live-fx" disabled>Clear live FX</button>
-        </div>
-        <div class="portrait-takes" role="group" aria-label="Live portraits">
-          <button type="button" id="take-crow" data-portrait="crow" disabled>Take Dr. Crow live</button>
-          <button type="button" id="take-beef" data-portrait="beef" disabled>Take Dr. Beef Supreme live</button>
-        </div>
-        <p id="panel-error" role="status"></p>
-        <a class="preview-link" href="/stage" target="_blank" rel="noopener">Open stage display ↗</a>
-      </section>
-      <p id="receipt" role="status"></p>
-      <p id="error" role="alert"></p>
+          <div class="take-bar">
+            <strong id="on-air">On air · …</strong>
+            <button type="button" id="take-live" aria-keyshortcuts="Alt+Enter" disabled>Take live <kbd>Alt+Enter</kbd></button>
+          </div>
+          <p id="receipt" role="status"></p>
+          <p id="error" role="alert"></p>
+          <div class="live-fx">
+            <div><h3>On-air effects</h3><span id="live-fx-status"></span></div>
+            <button type="button" id="melt-live" disabled>Melt live</button>
+            <button type="button" id="clear-live-fx" disabled>Clear live FX</button>
+          </div>
+          <div class="screen-cues">
+            <div><h3>One-shot effects</h3><small id="cue-status" role="status">Ready</small></div>
+            <button type="button" data-screen-cue="crack" disabled>Crack the screen</button>
+            <button type="button" data-screen-cue="stars" disabled>Shooting stars</button>
+          </div>
+          <div class="splice-control">
+            <label for="splice-seconds">Archive frame splice</label>
+            <select id="splice-seconds" disabled>
+              <option value="0">Off</option>
+              <option value="5">Every 5 seconds · test</option>
+              <option value="60">Every minute · show</option>
+            </select>
+            <small>One frame each, alternating the Dallas motorcade and the September 11 skyline.</small>
+          </div>
+          <p id="panel-error" role="status"></p>
+          <a class="preview-link" href="/stage" target="_blank" rel="noopener">Open stage display ↗</a>
+        </section>
+      </div>
       <div id="gif-controls" hidden>
         <section id="sd-controls" class="ticket">
           <div class="tickethead"><h2>GIF playback</h2><small id="gif-playback"></small></div>
@@ -111,6 +127,9 @@
               required /></label
           ><button>Set price</button>
         </form>
+      </section>
+      <section class="ticket brightness-panel">
+        <div class="setting"><label>Brightness (0–255)<input id="brightness" type="number" min="0" max="255" required></label></div>
       </section>
     </main>
     <footer>TOO LATE SHOW <span>◆</span> CROWNET TERMINAL</footer>

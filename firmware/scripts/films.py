@@ -59,3 +59,16 @@ source = "\n".join(lines)
 if not header.exists() or header.read_text() != source:
     header.write_text(source)
 env.Append(CPPPATH=[str(output)])
+
+photo_file = assets.parents[1] / "art/splice-photos.rgb565"
+photos = photo_file.read_bytes()
+if len(photos) != 2 * 128 * 96 * 2:
+    raise ValueError("Expected two 128x96 little-endian RGB565 splice frames")
+rows = ["#pragma once", "const uint16_t splicePhotos[] PROGMEM = {"]
+for offset in range(0, len(photos), 64):
+    rows.append(",".join(map(str, struct.unpack_from("<32H", photos, offset))) + ",")
+rows.append("};")
+header = output / "splice_assets.h"
+source = "\n".join(rows)
+if not header.exists() or header.read_text() != source:
+    header.write_text(source)

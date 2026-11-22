@@ -20,7 +20,7 @@ The password prompt above uses zsh. In Bash use `read -rs -p 'Booth password: ' 
 3. Prepare **GIF**, choose a folder or enter a full SD path such as `/gifs/joker/hotline.gif`, and type the five scrolls. You can also set their speeds, brightness and an optional feature line or effect. Take the cue when you want those changes on air. The browser stage shows the overlay text and identifies the SD selection. The Teensy plays the SD file.
 4. Prepare and take **Blood Futures**. Hold the drift and set the mark to 100. Open two audience seats in separate browser profiles and call opposite directions at 1×. Set the mark to 110. The stage shows the price, candles, one bull and one bear. The seats show 55,000 and 45,000 PISS COIN.
 
-The booth also has two one-click portrait takes, **Dr. Crow** and **Dr. Beef Supreme**. Each plays a ten-second idle loop. To return to a show cue, select its mode and take it live.
+The five built-in saved stacks in the booth’s left sidebar include the ten-second **Dr. Crow** and **Dr. Beef Supreme** portraits. Click a stack or use the up/down arrows with the list focused to load its draft into the preview. Changes to that stack are remembered. **Save as** creates a separate named copy. **Take live** or **Alt+Enter** puts the selected draft on air. Brightness is at the bottom of the booth.
 
 The 24-second Introduction places Crow, Beef, Peter Thiel and Santa against the poster’s ochre jungle and falling petals. The CAW-IN and Santa Tracker sequences return to an ensemble Christmas Telethon title. The Teensy plays the intro and all four portraits directly from flash. The browser stage uses the same GIFs. To regenerate the intro from its source art, run `python3 art/telethon.py` with Pillow installed before building the firmware.
 
@@ -55,6 +55,12 @@ Choose a mode in the booth to recall its widget stack. The list runs from back t
 Blood Futures starts with the chart and a rightward ticker. You can add the ticker to any mode. PISSCOIN, PRICECOIN, BONER, FARTCOIN, ROGUE and CROW each have a fixed color and a simulated price. Their quotes move independently of the audience market.
 
 Move **Melt** and **Hue shift** while watching the draft monitor. **Take live** switches the prepared stack and its effects together. **Melt live** sends the two slider settings directly to the on-air stack, leaving a different draft prepared. When both sliders are zero, that button uses 75% melt and 65% hue. **Clear live FX** immediately restores the live picture. The draft monitor and browser stage render from the same scene data. Animation clocks run on each display. SD footage and hardware macros are visible on the physical panel.
+
+Enable **Audience join banner** to scroll the trade address, Wi-Fi name, and password across the top. Take the prepared stack to display it. The bundled Pi launcher reads the Wi-Fi name from line one and the password from line two of `~/.config/qiron/join-wifi`. For other installations set `QYRON_JOIN_SSID` and `QYRON_JOIN_PASSWORD` in the server environment. `QYRON_JOIN_URL` defaults to `chyron.local:4000`. The complete message, including labels, must fit 240 UTF-8 bytes. Leave Wi-Fi fields unset to show only the trading address.
+
+**Crack the screen** breaks the live picture into falling pieces for ten seconds. **Shooting stars** sends rainbow streaks and sparks across it for ten seconds. A new button press replaces the active one-shot. The underlying scene keeps playing. The **Archive frame splice** control inserts one photo for one compositor frame every five seconds in test mode or every minute in show mode. The first photo appears after one full interval. Select **Off** to stop it.
+
+The images are Victor Hugo King’s Dallas motorcade photograph from November 22, 1963, and the National Park Service view of the September 11 skyline with the Statue of Liberty in the foreground. The latter is credited to NPS employee Gene Kuziw in figure 16 of the Liberty Island inventory (printed page 61). Both were resized for the panel. [Library of Congress collection record](https://www.loc.gov/item/2004676894/) · [King rights statement](https://www.loc.gov/rr/print/res/489_king.html) · [National Park Service inventory](https://irma.nps.gov/DataStore/FileSource/Get/2188771)
 
 The Pi stores layouts, prices and cues. The Teensy decodes local media, composites the layers into 128 × 96 RGB pixels, then applies displacement and color rotation before the frame swap. A six-price update occupies 28 bytes on USB including framing. A live FX update occupies six bytes. Running animations need no per-frame USB traffic.
 
@@ -97,10 +103,13 @@ The Pi and Teensy use one framed binary protocol over USB serial. Flash the new 
 | 41 | Preload a field | One-byte field method followed by its normal payload |
 | 42 | Take the prepared scene | Empty |
 | 43 | Update ticker prices | Six little-endian uint32 prices in cents, in the ticker order above |
-| 44 | Set widget stack | Melt and hue bytes (0–100), followed by 0–14 distinct widget IDs in back-to-front order |
+| 44 | Set widget stack | Melt and hue bytes (0–100), followed by 0–15 distinct widget IDs in back-to-front order |
 | 45 | Set live effects | Melt and hue bytes (0–100) |
+| 46 | Play a one-shot on the live screen | Type byte (1 = crack, 2 = stars) followed by a little-endian uint32 seed |
+| 47 | Set live photo splice interval | One byte, 0, 5 or 60 seconds |
+| 48 | Set join banner text | 1–240 UTF-8 bytes |
 
-Widget IDs 0–7 are SD, chart, intro, Crow, Beef, Peter, Santa and ticker. IDs 8–13 select scrolls 1–5 and F. Preload the stack as the first field of a custom scene, then send its required data and take. Live quote and FX updates can run while another scene is staged.
+Widget IDs 0–7 are SD, chart, intro, Crow, Beef, Peter, Santa and ticker. IDs 8–13 select scrolls 1–5 and F. ID 14 enables the join banner and requires field 48 in its prepared scene. Preload the stack as the first field of a custom scene, then send its required data and take. Live quote and FX updates can run while another scene is staged.
 
 `GET /api/stage` exposes the on-air display, current mark, open counts and candles. The authenticated `GET /api/panel` exposes the draft, its revision, the on-air mode and preload status. A booth edit posts to `/api/operator`; a take posts `{"take": revision}` to that endpoint. A stale revision returns HTTP 409.
 

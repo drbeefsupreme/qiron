@@ -13,13 +13,13 @@ stageLines.forEach((id, i) => {
   stageText.append(term, value);
 });
 
-const widgetNames = {sd: "Panel SD", chart: "Blood Futures", ticker: "Ticker", ...stageTitles};
+const widgetNames = {sd: "Panel SD", chart: "Blood Futures", ticker: "Ticker", join: "Audience join banner", ...stageTitles};
 let previousWidgets;
 
 function renderStage(data) {
   const widgets = data.widgets || (data.mode === "gif" ? ["sd", ...stageLines] : [stageSource[data.mode]]);
   stageCanvas.update(data);
-  const title = stageTitles[data.mode] || "Stage mix";
+  const title = data.preset_name || stageTitles[data.mode] || "Stage mix";
   el("stage-title").textContent = title;
   el("stage-canvas").setAttribute("aria-label", title + " · on-air composition");
   const order = widgets.join(",");

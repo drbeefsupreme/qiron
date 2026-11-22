@@ -1,5 +1,5 @@
 defmodule Qiron.Display do
-  @ids ~w(sd chart intro crow beef peter santa ticker line1 line2 line3 line4 line5 lineF)
+  @ids ~w(sd chart intro crow beef peter santa ticker line1 line2 line3 line4 line5 lineF join)
        |> Enum.with_index()
        |> Map.new()
   @gif_widgets ~w(sd line1 line2 line3 line4 line5 lineF)
@@ -10,9 +10,15 @@ defmodule Qiron.Display do
     "crow" => ["crow"],
     "beef" => ["beef"]
   }
-  @template_keys [:widgets, :melt, :hue, :lines, :speeds, :gif]
+  @builtins [
+    {"gif", "GIF"},
+    {"blood", "Blood Futures"},
+    {"intro", "Introduction"},
+    {"crow", "Dr. Crow"},
+    {"beef", "Dr. Beef Supreme"}
+  ]
 
-  defstruct templates: %{},
+  defstruct preset_id: "gif",
             widgets: @gif_widgets,
             melt: 0,
             hue: 0,
@@ -42,36 +48,81 @@ defmodule Qiron.Display do
   def method(name), do: Map.fetch!(@methods, name)
 
   def widget_id(widget), do: Map.fetch!(@ids, widget)
+
+  def join_banner! do
+    url = System.get_env("QYRON_JOIN_URL")
+    url = if url in [nil, ""], do: "chyron.local:4000", else: url
+
+    line =
+      [
+        {"TRADE BLOOD FUTURES ON YOUR PHONE", url},
+        {"WI-FI", System.get_env("QYRON_JOIN_SSID")},
+        {"PASSWORD", System.get_env("QYRON_JOIN_PASSWORD")}
+      ]
+      |> Enum.reject(fn {_, value} -> value in [nil, ""] end)
+      |> Enum.map_join("   ", fn {label, value} -> label <> ": " <> value end)
+
+    unless byte_size(line) <= 240 and String.valid?(line) and
+             not String.match?(line, ~r/[[:cntrl:]]/u) do
+      raise ArgumentError,
+            "QYRON_JOIN_URL, QYRON_JOIN_SSID and QYRON_JOIN_PASSWORD must form one UTF-8 banner of at most 240 bytes including labels, without control characters"
+    end
+
+    line
+  end
+
   def line_widget(6), do: "lineF"
   def line_widget(id), do: "line#{id}"
 
-  def restore(%{widgets: _} = d), do: d
+  def builtin?(id), do: Map.has_key?(@defaults, id)
 
-  def restore(old) do
-    d = struct(__MODULE__, Map.take(old, [:brightness, :lines, :speeds, :gif]))
-    {:ok, restored} = change(d, {:mode, Map.get(old, :mode, "gif")})
-    restored
+  defp builtin(mode),
+    do: %__MODULE__{mode: mode, preset_id: mode, widgets: Map.fetch!(@defaults, mode)}
+
+  def restore(%{widgets: _, mode: mode} = old) do
+    struct(__MODULE__, Map.delete(old, :__struct__))
+    |> Map.put(:preset_id, Map.get(old, :preset_id, mode))
   end
 
-  defp template(mode),
-    do: Map.take(%__MODULE__{widgets: Map.fetch!(@defaults, mode)}, @template_keys)
+  def restore(old) do
+    mode = Map.get(old, :mode, "gif")
+    keys = if mode == "gif", do: [:brightness, :lines, :speeds, :gif], else: [:brightness]
+    struct!(builtin(mode), Map.take(old, keys))
+  end
 
-  def remember_live_fx(draft, live, melt, hue) do
-    saved = Map.get_lazy(draft.templates, live.mode, fn -> template(live.mode) end)
+  def restore_presets(old, draft) do
+    remembered = Map.get(old, :templates, %{})
 
-    if draft.mode != live.mode and {saved.melt, saved.hue} == {live.melt, live.hue} do
-      updated = %{saved | melt: melt, hue: hue}
-      templates = save_template(draft.templates, live.mode, updated)
-      %{draft | templates: templates}
-    else
-      draft
+    for {id, name} <- @builtins, into: %{} do
+      base = %{builtin(id) | brightness: draft.brightness}
+
+      scene =
+        cond do
+          draft.preset_id == id ->
+            draft
+
+          Map.has_key?(remembered, id) ->
+            struct!(base, Map.fetch!(remembered, id))
+
+          id == "gif" and not Map.has_key?(old, :widgets) ->
+            struct!(base, Map.take(old, [:lines, :speeds, :gif]))
+
+          true ->
+            base
+        end
+
+      {id, %{name: name, scene: scene}}
     end
   end
 
-  defp save_template(templates, mode, value) do
-    if value == template(mode),
-      do: Map.delete(templates, mode),
-      else: Map.put(templates, mode, value)
+  def preset_list(presets) do
+    builtin_ids = Enum.map(@builtins, &elem(&1, 0))
+
+    custom =
+      presets |> Map.drop(builtin_ids) |> Enum.sort_by(fn {_, p} -> String.downcase(p.name) end)
+
+    Enum.map(@builtins, fn {id, name} -> %{id: id, name: name} end) ++
+      Enum.map(custom, fn {id, p} -> %{id: id, name: p.name} end)
   end
 
   def cue(d, name) do
@@ -110,16 +161,6 @@ defmodule Qiron.Display do
       text = Map.get(display.lines, id, "")
       %{id: id, speed: Map.get(display.speeds, id, speed), text: text, override: text}
     end
-  end
-
-  def change(%{mode: mode} = d, {:mode, mode}), do: {:ok, d}
-
-  def change(d, {:mode, mode}) when is_map_key(@defaults, mode) do
-    current = Map.take(d, @template_keys)
-
-    saved = save_template(d.templates, d.mode, current)
-    {next, saved} = Map.pop_lazy(saved, mode, fn -> template(mode) end)
-    {:ok, struct!(%{d | mode: mode, templates: saved}, next)}
   end
 
   def change(d, {:widgets, widgets}) when is_list(widgets) do

@@ -2,6 +2,7 @@
 
 #include "display.h"
 #include <stdio.h>
+#include <algorithm>
 
 namespace scenes {
 using Surface = SMLayerBackground<rgb24, SM_BACKGROUND_OPTIONS_NONE>;
@@ -41,6 +42,24 @@ inline void blood(Surface& s, const display::Chart& chart) {
     snprintf(label, sizeof(label), "BEAR %lu", (unsigned long)chart.bearish);
     s.drawString(66, 78, scarlet, label);
 }
+inline void join(Surface& s, const char* text, uint32_t elapsed) {
+    const rgb24 navy(8,13,28), yellow(255,240,168);
+    s.fillRectangle(0,0,127,8,navy);
+    const int length = strlen(text);
+    const int period = length * 5 + 18;
+    const int phase = (elapsed / 50) % period;
+    for (int origin = -phase; origin < 128; origin += period) {
+        for (int i = std::max(0, -origin / 5); i < length && origin + i*5 < 128; ++i) {
+            auto glyph = std::lower_bound(apple5x7.Index, apple5x7.Index + apple5x7.Chars, uint8_t(text[i]));
+            if (glyph == apple5x7.Index + apple5x7.Chars || *glyph != uint8_t(text[i])) continue;
+            const uint8_t* rows = apple5x7.Bitmap + (glyph - apple5x7.Index) * 7;
+            for (int y = 0; y < 7; ++y)
+                for (int x = 0; x < 5; ++x)
+                    if (rows[y] & (0x80 >> x)) s.drawPixel(origin + i*5 + x, y+1, yellow);
+        }
+    }
+}
+
 inline void ticker(Surface& background, const uint32_t* quotes, uint32_t elapsed) {
     static const char* const names[] = {"PISSCOIN","PRICECOIN","BONER","FARTCOIN","ROGUE","CROW"};
     static const rgb24 colors[] = {{255,216,74},{84,207,255},{255,119,183},{169,236,92},{193,142,255},{255,146,89}};

@@ -17,6 +17,7 @@ static uint8_t payload[maxText + 6];
 struct Draft {
     display::Mode mode;
     bool ready, hasFields, hasStack, hasChart, hasQuotes, stopped;
+    char join[241];
     display::Stack stack;
     uint32_t quotes[6];
     int brightness, preset, effect;
@@ -33,7 +34,7 @@ static void abortDraft() {
     draft.ready = false;
     display::cancelFile();
 }
-static bool valid;
+static bool valid, liveJoinConfigured;
 
 void reset() {
     if (state != State::idle && (state == State::method || method == 40 || method == 41 || method == 42)) abortDraft();
@@ -52,7 +53,8 @@ static bool fieldLength(uint8_t id, uint16_t size) {
     if (id == 38) return size >= 28 && size <= 396 && (size - 12) % 16 == 0;
     if (id == 39) return size > 0 && size <= 240;
     if (id == 43) return size == 24;
-    if (id == 44) return size >= 2 && size <= 16;
+    if (id == 44) return size >= 2 && size <= 2 + display::widgetCount;
+    if (id == 48) return size > 0 && size <= 240;
     return false;
 }
 
@@ -61,6 +63,8 @@ static bool validLength() {
     if (method == 41) return length >= 1 && length <= maxText + 5;
     if (method == 42) return length == 0;
     if (method == 45) return length == 2;
+    if (method == 46) return length == 5;
+    if (method == 47) return length == 1;
     return fieldLength(method, length);
 }
 
@@ -90,7 +94,7 @@ static bool validPath(const char* path, uint16_t size) {
 
 static bool includes(uint8_t widget) {
     if (draft.hasStack) return memchr(draft.stack.ids, widget, draft.stack.count) != nullptr;
-    if (draft.mode == display::Mode::gif) return widget == 0 || widget >= 8;
+    if (draft.mode == display::Mode::gif) return widget == 0 || (widget >= 8 && widget < 14);
     return draft.mode == display::Mode::blood && (widget == 1 || widget == 7);
 }
 
@@ -100,7 +104,30 @@ static bool acceptsField(uint8_t id) {
     if (id < 12) return includes(8 + id % 6);
     if (id == 38) return includes(1);
     if (id == 43) return includes(7);
+    if (id == 48) return includes(14);
     return includes(0);
+}
+
+static bool joinGlyphs(const uint8_t* bytes, uint16_t size, char* output) {
+    for (unsigned i = 0; i < size;) {
+        uint32_t cp = bytes[i++];
+        if (!cp) return false;
+        if (cp >= 128) {
+            if (cp < 0xc2 || cp > 0xf4) return false;
+            unsigned extra = cp < 0xe0 ? 1 : cp < 0xf0 ? 2 : 3;
+            if (i + extra > size) return false;
+            cp &= 0x7f >> (extra+1);
+            for (unsigned n = 0; n < extra; ++n) {
+                if ((bytes[i] & 0xc0) != 0x80) return false;
+                cp = (cp << 6) | (bytes[i++] & 63);
+            }
+            if ((extra == 2 && cp < 0x800) || (extra == 3 && cp < 0x10000) ||
+                (cp >= 0xd800 && cp <= 0xdfff) || cp > 0x10ffff) return false;
+        }
+        *output++ = (cp >= 32 && cp <= 126) || (cp >= 160 && cp <= 255) ? char(cp) : '?';
+    }
+    *output = 0;
+    return true;
 }
 
 static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
@@ -147,6 +174,14 @@ static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
             memcpy(draft.quotes, quotes, sizeof(quotes));
             draft.hasQuotes = true;
         } else display::setQuotes(quotes);
+    } else if (id == 48) {
+        char glyphs[241];
+        if (!joinGlyphs(bytes, size, glyphs)) return false;
+        if (staged) strcpy(draft.join, glyphs);
+        else {
+            display::setJoin(glyphs);
+            liveJoinConfigured = true;
+        }
     } else if (id == 44) {
         if (bytes[0] > 100 || bytes[1] > 100) return false;
         display::Stack stack{};
@@ -160,7 +195,10 @@ static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
         if (staged) {
             draft.stack = stack;
             draft.hasStack = true;
-        } else display::setStack(stack);
+        } else {
+            if (!liveJoinConfigured && memchr(stack.ids, 14, stack.count)) return false;
+            display::setStack(stack);
+        }
     } else {
         const char* path = reinterpret_cast<char*>(bytes);
         if (!validPath(path, size)) return false;
@@ -174,6 +212,7 @@ static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
 static bool take() {
     if (!draft.ready || (includes(1) && !draft.hasChart)) return false;
     if (draft.hasStack && includes(7) && !draft.hasQuotes) return false;
+    if (includes(14) && !draft.join[0]) return false;
     if (*draft.path && !display::prepareFile(draft.path)) return false;
     display::beginTake();
     display::setMode(draft.mode);
@@ -181,6 +220,10 @@ static bool take() {
     if (includes(0)) display::applySource(draft.preset, draft.path, draft.stopped);
     if (draft.hasChart) display::setChart(draft.chart);
     if (draft.hasQuotes) display::setQuotes(draft.quotes);
+    if (draft.join[0]) {
+        display::setJoin(draft.join);
+        liveJoinConfigured = true;
+    }
     for (int i = 0; i < 6; ++i) {
         if (draft.speeds[i] >= 0) display::speed(i, draft.speeds[i]);
         if (draft.hasText[i]) display::text(i, stagedText[i], draft.repeats[i]);
@@ -199,6 +242,16 @@ static bool dispatch() {
     if (method == 45) {
         if (payload[0] > 100 || payload[1] > 100) return false;
         display::setFx(payload[0], payload[1]);
+        return true;
+    }
+    if (method == 46) {
+        if (payload[0] != 1 && payload[0] != 2) return false;
+        display::triggerBurst(payload[0], word(payload+1));
+        return true;
+    }
+    if (method == 47) {
+        if (payload[0] != 0 && payload[0] != 5 && payload[0] != 60) return false;
+        display::setSpliceInterval(payload[0]);
         return true;
     }
     if (method == 37 || method == 40) {

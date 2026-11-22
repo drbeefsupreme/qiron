@@ -44,27 +44,6 @@ defmodule Qiron.Panel do
 
   def handle_call({:command, {:take, rev}}, _, s), do: take(rev, s)
 
-  def handle_call({:command, {:portrait, mode, rev}}, _, s) when mode in ["crow", "beef"] do
-    if Market.call(:panel).revision == rev do
-      :ok = Market.call({:mode, mode})
-      draft = Market.call(:panel)
-      s = %{s | job: nil, prepared: nil, failed: nil, staged_fields: %{}}
-
-      if s.port do
-        fields = scene(draft, nil)
-
-        case prepare_now(fields, s, draft.revision) do
-          {:ok, s} -> take(draft.revision, s)
-          {reason, s} -> {:reply, reason, s}
-        end
-      else
-        take(draft.revision, s)
-      end
-    else
-      {:reply, :stale, s}
-    end
-  end
-
   def handle_call({:command, {:live_fx, melt, hue} = cmd}, _, s)
       when melt in 0..100 and hue in 0..100 do
     cond do
@@ -79,6 +58,21 @@ defmodule Qiron.Panel do
           {:ok, s} -> {:reply, Market.call(cmd), s}
           {error, s} -> {:reply, error, s}
         end
+    end
+  end
+
+  def handle_call({:command, {:screen_cue, kind}}, _, s) when kind in ["crack", "stars"] do
+    <<seed::little-32>> = :crypto.strong_rand_bytes(4)
+    type = if kind == "crack", do: 1, else: 2
+    live_command(s, {46, <<type, seed::little-32>>}, {:screen_cue, kind, seed})
+  end
+
+  def handle_call({:command, {:splice_seconds, seconds} = cmd}, _, s)
+      when seconds in [0, 5, 60] do
+    if seconds == Market.call(:splice_seconds) do
+      {:reply, :ok, s}
+    else
+      live_command(s, {47, <<seconds>>}, cmd)
     end
   end
 
@@ -194,15 +188,6 @@ defmodule Qiron.Panel do
     end
   end
 
-  defp prepare_now([], s, rev), do: {:ok, %{s | prepared: rev}}
-
-  defp prepare_now([frame | rest], s, rev) do
-    case transmit(s, frame) do
-      {:ok, s} -> prepare_now(rest, s, rev)
-      {reason, s} -> {reason, failure(s, {:draft, rev}, reason, frame)}
-    end
-  end
-
   defp plan(%{port: nil} = s, _), do: s
 
   defp plan(s, draft) do
@@ -267,10 +252,9 @@ defmodule Qiron.Panel do
         []
       end
 
-    [
-      {40, <<Map.fetch!(@modes, data.mode)>>}
-      | Enum.map(fields ++ lines ++ gif_fields ++ market_fields(data), &field/1)
-    ]
+    staged = Enum.map(fields ++ lines ++ gif_fields ++ market_fields(data), &field/1)
+    join = if "join" in data.widgets, do: [{41, :join_banner}], else: []
+    [{40, <<Map.fetch!(@modes, data.mode)>>} | staged ++ join]
   end
 
   defp market_fields(data) do
@@ -311,6 +295,27 @@ defmodule Qiron.Panel do
     end)
   end
 
+  defp live_command(%{port: nil} = s, _, cmd), do: {:reply, Market.call(cmd), s}
+
+  defp live_command(s, frame, cmd) do
+    case transmit(s, frame) do
+      {:ok, s} -> {:reply, Market.call(cmd), s}
+      {reason, s} -> {:reply, reason, s}
+    end
+  end
+
+  defp restore_splice(s) do
+    seconds = Market.call(:splice_seconds)
+
+    with {:ok, s} <- transmit(s, {47, <<0>>}),
+         {:ok, s} <- if(seconds == 0, do: {:ok, s}, else: transmit(s, {47, <<seconds>>})) do
+      :ok = Market.call(:splice_rearmed)
+      s
+    else
+      {_, s} -> disconnect(s)
+    end
+  end
+
   defp connect(s) do
     device = System.get_env("QYRON_DEVICE", "/dev/ttyACM0")
 
@@ -325,13 +330,15 @@ defmodule Qiron.Panel do
           Port.open({:spawn_executable, python}, [:binary, :exit_status, args: [bridge, device]])
 
         receive do
-          {^port, {:data, "R"}} -> %{s | port: port}
+          {^port, {:data, "R"}} -> restore_splice(%{s | port: port})
           {^port, {:exit_status, _}} -> s
         after
           1000 -> disconnect(%{s | port: port})
         end
     end
   end
+
+  defp transmit(s, {41, :join_banner}), do: transmit(s, field({48, Display.join_banner!()}))
 
   defp transmit(%{port: port} = s, {method, payload}) do
     Port.command(port, <<254, method, byte_size(payload)::little-16, payload::binary>>)

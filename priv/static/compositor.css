@@ -1,6 +1,33 @@
-#mixer{display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);border:1px solid #4a4b42;margin:18px 0;background:#161915;color:#efeee2}
-#mixer section{padding:15px;min-width:0}
-.mix-monitor{border-right:1px solid #505348;background:#242820}
+body[data-view="operator"] { --ink: #1c201c; --console: #232923; --edge: #495148; }
+body[data-view="operator"] :is(header, main, footer) { max-width: 1060px; }
+body[data-view="operator"] header { height: 56px; }
+body[data-view="operator"] main { padding-top: 24px; }
+body[data-view="operator"] h1 { font-size: clamp(38px, 5vw, 64px); margin: 8px 0 22px; }
+body[data-view="operator"] .eyebrow { margin-bottom: 0; }
+.booth-console { display: grid; grid-template-columns: minmax(220px, .86fr) minmax(0, 2fr); gap: 16px; align-items: start; margin-bottom: 16px; }
+.preset-sidebar { min-width: 0; padding: 16px; background: var(--ink); color: #f5f3ec; border-top: 3px solid var(--ink); }
+.preset-sidebar h2 { font-size: 23px; margin-bottom: 14px; }
+#preset-rail { display: grid; gap: 3px; max-height: 18rem; overflow-y: auto; }
+#preset-rail button { background: #2c332d; color: #e3e5db; text-align: left; border: 0; border-left: 4px solid transparent; padding: 9px 12px; font-weight: 600; overflow-wrap: anywhere; }
+#preset-rail button[aria-pressed="true"] { background: #e6ebdb; color: var(--ink); border-color: #96c275; }
+#preset-rail button:focus-visible { outline: 2px solid #7aa352; outline-offset: -3px; }
+.mix-monitor { margin-top: 20px; border-top: 1px solid var(--edge); padding-top: 14px; }
+#draft-status { color: #dddfd4; line-height: 1.4; margin-top: 8px; }
+.booth-panel { margin: 0; min-width: 0; padding: 18px; }
+#panel-status { font: 11px var(--mono); text-transform: uppercase; }
+#mixer { margin: 12px 0; background: var(--console); color: #efeee2; }
+.mix-stack { padding: 14px; }
+#save-stack-form { align-items: end; margin: 0; }
+#save-stack-form button { font-weight: 600; }
+#stack-name { min-width: 0; }
+.booth-panel .take-bar { justify-content: space-between; padding-top: 16px; margin-top: 16px; border-top: 2px solid var(--ink); }
+#on-air { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+#on-air::before { content: ""; flex: 0 0 8px; height: 8px; background: var(--red); border-radius: 50%; }
+.booth-panel #take-live { font-size: 15px; padding: 12px 16px; }
+.mix-faders { margin-top: 14px; }
+.brightness-panel .setting { margin: 0; }
+.brightness-panel input { max-width: 9rem; }
+@media (min-width: 961px) { body[data-view="operator"] { padding-inline: 24px; } }
 .mix-label,.live-fx{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .mix-label h3,.live-fx h3{margin:0;font-size:17px}
 .mix-label span,.live-fx span{font:10px var(--mono);letter-spacing:.04em}
@@ -23,4 +50,25 @@
 .live-fx{justify-content:flex-start;flex-wrap:wrap;border-top:1px solid var(--rule);margin-top:18px;padding-top:12px}
 .live-fx div{margin-right:auto}.live-fx span{display:block;margin-top:4px}
 #melt-live{background:#453057;color:#fff;border-color:#453057}
-@media(max-width:650px){#mixer{grid-template-columns:1fr}.mix-monitor{border-right:0;border-bottom:1px solid #505348}#draft-canvas{max-width:280px;margin-inline:auto}}
+.screen-cues,.splice-control{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid var(--rule);padding-top:12px;margin-top:12px}
+.screen-cues div{margin-right:auto}
+.screen-cues h3{margin:0;font-size:17px}
+.screen-cues small{display:block;margin-top:4px}
+.splice-control label{flex:none}
+.splice-control select{font:inherit;padding:6px;color:inherit;background:#fffdf6}
+.splice-control small{display:block;flex-basis:100%;font-weight:400;letter-spacing:0}
+
+.banner-toggle{display:flex;align-items:center;gap:8px;font:600 13px var(--mono);width:fit-content;margin:12px 0}
+.banner-toggle input{width:auto;margin:0;accent-color:#b9df88}
+
+@media (max-width: 720px) {
+  .booth-console { grid-template-columns: 1fr; gap: 12px; }
+  .preset-sidebar { padding: 14px; }
+  #preset-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mix-monitor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 12px; margin-top: 14px; }
+  .mix-monitor .mix-label { grid-column: 1 / -1; margin-bottom: 8px; }
+  .mix-monitor #draft-canvas { grid-row: span 2; margin: 0; }
+  .mix-monitor p { align-self: start; }
+  .mix-monitor #sd-preview { margin-top: 0; }
+  .booth-panel { padding: 14px; }
+}

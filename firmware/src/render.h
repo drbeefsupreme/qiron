@@ -9,7 +9,7 @@
 namespace compositor {
 template<class Scroll>
 void render(scenes::Surface& background, const display::Stack& stack, const uint32_t* started,
-            uint32_t now, const rgb24* sdPixels, const display::Chart& chart, const uint32_t* quotes,
+            uint32_t now, const rgb24* sdPixels, const display::Chart& chart, const uint32_t* quotes, const char* joinText,
             films::Player& filmPlayer, films::Cache* filmCaches, Scroll scroll) {
     background.fillScreen({0,0,0});
     auto* pixels = background.backBuffer();
@@ -18,6 +18,7 @@ void render(scenes::Surface& background, const display::Stack& stack, const uint
         else if (id == 1) scenes::blood(background, chart);
         else if (id <= 6) filmPlayer.overlay(pixels, filmsByLayer[id-2], filmCaches[id-2], now-started[id]);
         else if (id == 7) scenes::ticker(background, quotes, now-started[id]);
+        else if (id == 14) scenes::join(background, joinText, now-started[id]);
         else scroll(id-8, pixels);
     });
     compositor::effects(pixels, stack.melt, stack.hue, now);

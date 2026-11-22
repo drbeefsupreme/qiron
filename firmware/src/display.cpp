@@ -8,6 +8,7 @@
 #include <SD.h>
 #include <strings.h>
 #include "render.h"
+#include "cue_playback.h"
 
 namespace {
 
@@ -63,9 +64,11 @@ DMAMEM films::Player filmPlayer;
 DMAMEM films::Cache filmCaches[5];
 display::Stack stack{7, {0,8,9,10,11,12,13}, 0, 0};
 uint16_t mask = 0x3f01;
-uint32_t started[14], lastComposition, lastScroll;
+char joinText[241];
+uint32_t started[display::widgetCount], lastComposition, lastScroll;
 uint32_t quotes[6];
 bool dirty = true;
+CuePlayback cues;
 Gif first;
 DMAMEM Gif second;
 Gif *live = &first, *spare = &second;
@@ -338,9 +341,17 @@ void setMode(Mode next) {
     setStack(preset);
 }
 
+void triggerBurst(uint8_t kind, uint32_t seed) { cues.trigger(kind, seed, millis()); }
+void setSpliceInterval(uint8_t seconds) { cues.setInterval(seconds, millis()); }
+
 void setFx(uint8_t melt, uint8_t hue) {
     stack.melt = melt;
     stack.hue = hue;
+    dirty = true;
+}
+
+void setJoin(const char* glyphs) {
+    strcpy(joinText, glyphs);
     dirty = true;
 }
 
@@ -537,7 +548,7 @@ void effect(uint8_t method) {
 
 static void compose(uint32_t now) {
     while (background.isSwapPending()) {}
-    compositor::render(background, stack, started, now, sdSurface.backBuffer(), chart, quotes,
+    compositor::render(background, stack, started, now, sdSurface.backBuffer(), chart, quotes, joinText,
                        filmPlayer, filmCaches, [](uint8_t id, rgb24* pixels) {
         if (id == 5 && demoVisible) compositor::drawLine(demo, pixels, 1, 11);
         else if (!hasText[id]) return;
@@ -547,6 +558,7 @@ static void compose(uint32_t now) {
         }
         else compositor::drawLine(*lines[id], pixels);
     });
+    cues.render(background.backBuffer(), now);
     background.swapBuffers(false);
     lastComposition = now;
     dirty = false;
@@ -572,11 +584,11 @@ void tick() {
         }
     }
     if (now - lastComposition >= 33) {
-        bool changed = dirty || stack.melt || stack.hue;
+        bool changed = dirty || stack.melt || stack.hue || cues.needsFrame(now);
         compositor::layers(stack, [&](uint8_t id) {
             if (id >= 2 && id <= 6)
                 changed |= filmCaches[id-2].frame != &films::frameAt(filmsByLayer[id-2], now-started[id]);
-            if (id == 7 || (id >= 8 && (hasText[id-8] || (id == 13 && demoVisible)))) changed = true;
+            if (id == 7 || id == 14 || (id >= 8 && id < 14 && (hasText[id-8] || (id == 13 && demoVisible)))) changed = true;
         });
         if (changed) compose(now);
         else lastComposition = now;

@@ -21,6 +21,7 @@ class Panel:
         self.device = device
         self.thread = None
         self.frames = []
+        self.reject_methods = set()
         self.changed = threading.Condition()
         self.stopped = threading.Event()
 
@@ -58,7 +59,7 @@ class Panel:
                 del buffer[: 4 + length]
                 os.write(self.fd, b"\xfe")
                 time.sleep(0.002)
-                rejected = method == 41 and payload == b"\x27/gifs/joker/missing.gif"
+                rejected = method in self.reject_methods or (method == 41 and payload == b"\x27/gifs/joker/missing.gif")
                 os.write(self.fd, bytes([int(rejected)]))
                 with self.changed:
                     self.frames.append((method, payload))
@@ -149,7 +150,7 @@ def rehearse(browser, url, password, panel):
 
     set_price("100")
     start = len(panel.frames)
-    operator.locator("#mode-blood").click()
+    operator.locator('[data-preset="blood"]').click()
     panel.expect(40, bytes([1]), start)
     expect(stage.locator("#stage-gif")).to_be_visible()
     assert (42, b"") not in panel.frames[start:]
@@ -197,7 +198,7 @@ def rehearse(browser, url, password, panel):
 
     cue = "Q" + "ab" * 16383
     start = len(panel.frames)
-    operator.locator("#mode-gif").click()
+    operator.locator('[data-preset="gif"]').click()
     operator.locator("#layer4").fill(cue)
     operator.locator("#speed4").fill("85")
     operator.locator("#brightness").fill("73")
@@ -223,14 +224,18 @@ def rehearse(browser, url, password, panel):
     assert request.get(url + "/api/stage").json()["gif"]["file"] == path
     assert (42, b"") not in panel.frames[start:]
     operator.locator("#gif-file").fill(path)
-    operator.locator("#mode-intro").click()
+    operator.locator('[data-preset="intro"]').click()
     panel.expect(40, bytes([2]), start)
     take("intro")
     expect(stage.locator("#stage-canvas")).to_be_visible()
     assert stage.locator("#stage-canvas").evaluate("canvas => [canvas.width, canvas.height]") == [128, 96]
     for mode, mode_id in [("crow", 3), ("beef", 4)]:
         start = len(panel.frames)
-        operator.locator("#take-" + mode).click()
+        before = request.get(url + "/api/stage").json()["preset_id"]
+        operator.locator(f'[data-preset="{mode}"]').click()
+        expect(operator.locator("#take-live")).to_be_enabled()
+        assert request.get(url + "/api/stage").json()["preset_id"] == before
+        operator.keyboard.press("Alt+Enter")
         panel.expect(40, bytes([mode_id]), start)
         panel.expect(42, b"", start)
         expect(stage.locator("#stage-" + mode)).to_be_visible()
@@ -240,7 +245,7 @@ def rehearse(browser, url, password, panel):
     assert public.post(url + "/api/operator", headers={"x-qiron": "1"},
                        data={"action": "gifJ"}).status == 401
     assert booth.request.post(url + "/api/operator", data={"action": "gifJ"}).status == 403
-    operator.locator("#mode-gif").click()
+    operator.locator('[data-preset="gif"]').click()
     expect(operator.locator("#layer4")).to_have_value(cue)
     assert booth.request.post(url + "/api/operator", headers={"x-qiron": "1"},
                               data={"layer": 6, "text": cue + "x"}).status == 422
@@ -253,7 +258,7 @@ def rehearse(browser, url, password, panel):
 
     panel.detach()
     expect(operator.locator("#panel-status")).to_contain_text("disconnected", ignore_case=True, timeout=10000)
-    operator.locator("#mode-intro").click()
+    operator.locator('[data-preset="intro"]').click()
     take("intro", online=False)
     reconnected = len(panel.frames)
     panel.attach()
@@ -262,7 +267,7 @@ def rehearse(browser, url, password, panel):
     expect(operator.locator("#panel-status")).to_contain_text("connected", ignore_case=True)
     assert (41, bytes([16])) not in panel.frames[reconnected:]
 
-    operator.locator("#mode-gif").click()
+    operator.locator('[data-preset="gif"]').click()
     operator.locator("#gif-source").select_option("beef")
     operator.locator("#layer1").fill("OFFSHORE EXCHANGE")
     for widget in ["ticker", "peter", "santa"]:
@@ -293,11 +298,35 @@ def rehearse(browser, url, password, panel):
     assert [q["symbol"] for q in scene["tickers"]] == ["PISSCOIN", "PRICECOIN", "BONER", "FARTCOIN", "ROGUE", "CROW"]
     assert scene["melt"] == 72 and scene["hue"] == 61
     expect(stage.locator("#l1")).to_have_text("OFFSHORE EXCHANGE")
-    operator.locator("#mode-blood").click()
+    operator.locator('[data-preset="blood"]').click()
     expect(operator.locator("#widget-stack li")).to_have_count(2)
-    operator.locator("#mode-gif").click()
+    operator.locator('[data-preset="gif"]').click()
     expect(operator.locator("#gif-source")).to_have_value("beef")
     expect(operator.locator("#melt")).to_have_value("72")
+
+    start = len(panel.frames)
+    operator.locator("#join-enabled").check()
+    operator.locator("#stack-name").fill("House mix")
+    operator.locator("#save-stack").click()
+    custom = operator.get_by_role("button", name="House mix", exact=True)
+    expect(custom).to_have_attribute("aria-pressed", "true")
+    expect(operator.locator("#take-live")).to_be_enabled()
+    assert panel_state()["widgets"][-1] == "join"
+    old_live = request.get(url + "/api/stage").json()
+    assert "join_banner" not in old_live and old_live["preset_id"] == "gif"
+    custom.focus()
+    operator.keyboard.press("ArrowUp")
+    expect(operator.locator('[data-preset="beef"]')).to_have_attribute("aria-pressed", "true")
+    operator.keyboard.press("ArrowDown")
+    expect(custom).to_have_attribute("aria-pressed", "true")
+    expect(operator.locator("#join-enabled")).to_be_checked()
+    expect(operator.locator("#take-live")).to_be_enabled()
+    assert (42, b"") not in panel.frames[start:]
+    operator.keyboard.press("Alt+Enter")
+    panel.expect(42, b"", start)
+    expect(stage.locator("#stage-title")).to_have_text("House mix")
+    live = request.get(url + "/api/stage").json()
+    assert "chyron.local:4000" in live["join_banner"] and live["preset_name"] == "House mix"
 
 
 

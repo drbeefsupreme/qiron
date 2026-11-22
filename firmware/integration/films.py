@@ -74,7 +74,16 @@ with tempfile.TemporaryDirectory() as directory:
     assert a.getbbox() and a.getbbox()[1] >= 88
     assert a.crop((0,88,127,96)).tobytes() == b.crop((1,88,128,96)).tobytes()
     assert image("1,7",0).crop((0,0,128,88)).tobytes() == image("1",0).crop((0,0,128,88)).tobytes()
-    print("Verified transparent portrait stacks, text order, chart, ticker motion, whole-frame melt and hue")
+    chart = image("1",0)
+    banner = image("1,14",0)
+    assert banner.crop((0,9,128,96)).tobytes() == chart.crop((0,9,128,96)).tobytes()
+    assert {color for _, color in banner.crop((0,0,128,9)).getcolors()} == {(8,13,28),(255,240,168)}
+    assert image("14,1",0).tobytes() == chart.tobytes()
+    assert image("14",0).crop((1,0,128,9)).tobytes() == image("14",50).crop((0,0,127,9)).tobytes()
+    assert image("14",0).tobytes() == image("14",50*(13*5+18)).tobytes()
+    dense = ",".join(map(str,range(15)))
+    assert image(dense,600).crop((0,0,128,9)).tobytes() == image("14",600).crop((0,0,128,9)).tobytes()
+    print("Verified portrait stacks, text order, chart, ticker, join banner clipping and wrap, melt and hue")
     if "--bench" in sys.argv:
-        for ids, melt, hue in [("3",0,0),("0,1,2,3,4,5,6,7,8,9,10,11,12,13",100,100)]:
+        for ids, melt, hue in [("3",0,0),("0,1,2,3,4,5,6,7,8,9,10,11,12,13,14",100,100)]:
             print(ids, draw(ids,["bench"],melt,hue).decode().strip())

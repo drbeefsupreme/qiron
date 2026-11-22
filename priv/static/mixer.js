@@ -1,7 +1,8 @@
 "use strict";
 
 const mediaNames = {sd: "SD card GIF", crow: "Dr. Crow", beef: "Dr. Beef Supreme", peter: "Peter Thiel", santa: "Santa Claus", intro: "Telethon intro"};
-const widgetNames = {...mediaNames, chart: "Blood Futures chart", ticker: "Exchange ticker", line1: "Middle text", line2: "Top text", line3: "Bottom text", line4: "Left text", line5: "Right text", lineF: "Feature text"};
+const widgetNames = {...mediaNames, chart: "Blood Futures chart", ticker: "Exchange ticker", join: "Audience join banner", line1: "Middle text", line2: "Top text", line3: "Bottom text", line4: "Left text", line5: "Right text", lineF: "Feature text"};
+let cueBusy = false;
 let preview, previewMarket = {}, liveFxBusy = false, lastStack;
 
 function effectiveStack() {
@@ -14,7 +15,7 @@ function renderPreview() {
     const update = edits.get("layer" + layer.id);
     return {...layer, text: update ? update.text : layer.text, speed: edits.get("speed" + layer.id)?.speed ?? layer.speed};
   });
-  preview.update({...previewMarket, ...draft, widgets: effectiveStack(), layers,
+  preview.update({...previewMarket, ...draft, widgets: effectiveStack(), layers, screen_cue: null, splice_seconds: 0,
     melt: edits.get("melt")?.melt ?? draft.melt, hue: edits.get("hue")?.hue ?? draft.hue});
 }
 
@@ -64,6 +65,7 @@ function drawStack(widgets) {
 
 function renderMixer() {
   const widgets = effectiveStack();
+  el("join-enabled").checked = widgets.includes("join");
   const signature = widgets.join(",");
   if (signature !== lastStack) {
     drawStack(widgets);
@@ -86,11 +88,12 @@ function renderMixer() {
     el(key + "-value").value = value + "%";
   }
   el("live-fx-status").textContent = "Melt " + draft.live_melt + "% · Hue " + draft.live_hue + "%";
+  renderCueControls();
   renderPreview();
 }
 
 async function liveFx(melt, hue) {
-  if (liveFxBusy || switching) return;
+  if (liveFxBusy) return;
   liveFxBusy = true;
   draftStatus();
   try {
@@ -105,8 +108,41 @@ async function liveFx(melt, hue) {
   }
 }
 
+function renderCueControls() {
+  const names = {crack: "Screen break", stars: "Shooting stars"};
+  const cue = draft.screen_cue;
+  el("cue-status").textContent = cue ? names[cue.kind] + " · " + Math.max(1, Math.ceil((10000 - cue.elapsed_ms) / 1000)) + " s left" : "Ready · 10 s per effect";
+  for (const button of document.querySelectorAll("[data-screen-cue]")) button.disabled = cueBusy;
+  el("splice-seconds").disabled = cueBusy;
+  if (!cueBusy) el("splice-seconds").value = draft.splice_seconds;
+}
+
+async function sendScreenControl(payload) {
+  if (cueBusy) return;
+  cueBusy = true;
+  renderCueControls();
+  el("error").textContent = "";
+  try {
+    await api("operator", payload);
+  } catch (error) {
+    el("error").textContent = error.message;
+  } finally {
+    await refresh();
+    cueBusy = false;
+    renderCueControls();
+  }
+}
+
 function initMixer() {
+  for (const button of document.querySelectorAll("[data-screen-cue]")) {
+    button.onclick = () => sendScreenControl({screen_cue: button.dataset.screenCue});
+  }
+  el("splice-seconds").onchange = () => sendScreenControl({splice_seconds: Number(el("splice-seconds").value)});
   preview = window.QyronCanvas(el("draft-canvas"));
+  el("join-enabled").onchange = () => {
+    const widgets = effectiveStack().filter(id => id !== "join");
+    setWidgets(el("join-enabled").checked ? [...widgets, "join"] : widgets);
+  };
   const source = el("gif-source");
   source.add(new Option("Choose a background", ""));
   source.options[0].disabled = true;

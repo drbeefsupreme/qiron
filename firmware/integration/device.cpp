@@ -35,6 +35,7 @@ void display::setChart(const Chart& c) {
     fprintf(stderr, "chart %u %u %u %u %u\n", c.mark, c.bullish, c.bearish, c.count, c.candles[c.count-1].close);
 }
 
+void display::setJoin(const char* glyphs) { fprintf(stderr, "join %zu\n", std::string(glyphs).size()); }
 void display::setQuotes(const uint32_t* cents) {
     fprintf(stderr, "quotes");
     for (unsigned i = 0; i < 6; ++i) fprintf(stderr, " %u", cents[i]);
@@ -45,6 +46,8 @@ void display::setStack(const Stack& stack) {
     for (unsigned i = 0; i < stack.count; ++i) fprintf(stderr, " %u", stack.ids[i]);
     fputc('\n', stderr);
 }
+void display::triggerBurst(uint8_t kind, uint32_t seed) { fprintf(stderr, "burst %u %u\n", kind, seed); }
+void display::setSpliceInterval(uint8_t seconds) { fprintf(stderr, "splice %u\n", seconds); }
 void display::setFx(uint8_t melt, uint8_t hue) {
     fprintf(stderr, "fx %u %u\n", melt, hue);
 }

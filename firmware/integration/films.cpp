@@ -27,17 +27,17 @@ int main(int argc, char** argv) {
     line.start("CROW LIVE", -1);
     static films::Cache caches[5];
     films::Player player;
-    uint32_t started[14]{}, quotes[]{12345,6543,300,999,9000,12200};
+    uint32_t started[display::widgetCount]{}, quotes[]{12345,6543,300,999,9000,12200};
     display::Chart chart{11000,13,7,{{9000,11000,6700,10500}},1};
     display::Stack stack{};
     for (char* word = strtok(argv[1], ","); word; word = strtok(nullptr, ",")) {
-        if (stack.count >= 14) return 1;
+        if (stack.count >= display::widgetCount) return 1;
         stack.ids[stack.count++] = atoi(word);
     }
     stack.melt = atoi(argv[2]);
     stack.hue = atoi(argv[3]);
     auto render = [&](uint32_t ms) {
-        compositor::render(panel, stack, started, ms, sd, chart, quotes, player, caches,
+        compositor::render(panel, stack, started, ms, sd, chart, quotes, "SAMPLE BANNER", player, caches,
             [&](uint8_t, rgb24* pixels) { compositor::drawLine(line,pixels); });
     };
     if (!strcmp(argv[4], "bench")) {

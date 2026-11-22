@@ -10,6 +10,16 @@ if [[ ${#OPERATOR_PASSWORD} -lt 3 ]]; then
   echo 'Use at least 3 characters.' >&2
   exit 1
 fi
+join_file="${XDG_CONFIG_HOME:-$HOME/.config}/qiron/join-wifi"
+if [[ -f $join_file ]]; then
+  mapfile -t join_lines < "$join_file"
+  if (( ${#join_lines[@]} != 2 )); then
+    echo 'The join-wifi file needs two lines: Wi-Fi name, then password.' >&2
+    exit 1
+  fi
+  export QYRON_JOIN_SSID="${QYRON_JOIN_SSID-${join_lines[0]}}"
+  export QYRON_JOIN_PASSWORD="${QYRON_JOIN_PASSWORD-${join_lines[1]}}"
+fi
 export OPERATOR_PASSWORD
 export SHOW_FILE="${SHOW_FILE:-${XDG_DATA_HOME:-$HOME/.local/share}/qiron/show.etf}"
 exec bin/qiron start

@@ -8,7 +8,7 @@ defmodule Qiron.Web do
     at: "/",
     from: {:qiron, "priv/static"},
     only:
-      ~w(style.css compositor.css stage.css mixer.js compositor.js exchange.css app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif peter-thiel.gif santa.gif archivo-black.ttf barlow-condensed.ttf)
+      ~w(style.css compositor.css stage.css screen-cues.js splice-jfk.png splice-911.png mixer.js compositor.js exchange.css app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif peter-thiel.gif santa.gif archivo-black.ttf barlow-condensed.ttf)
   )
 
   plug(:match)
@@ -49,9 +49,11 @@ defmodule Qiron.Web do
   post "/api/operator" do
     command =
       case conn.body_params do
-        %{"portrait" => mode, "revision" => rev}
-        when mode in ["crow", "beef"] and is_integer(rev) ->
-          {:portrait, mode, rev}
+        %{"preset" => id} when is_binary(id) ->
+          {:preset, id}
+
+        %{"save_as" => name} when is_binary(name) ->
+          {:save_as, name}
 
         %{"hold" => held} ->
           {:hold, held}
@@ -88,6 +90,12 @@ defmodule Qiron.Web do
 
         %{"hue" => hue} ->
           {:hue, hue}
+
+        %{"screen_cue" => kind} when kind in ["crack", "stars"] ->
+          {:screen_cue, kind}
+
+        %{"splice_seconds" => seconds} when seconds in [0, 5, 60] ->
+          {:splice_seconds, seconds}
 
         %{"brightness" => value} ->
           {:brightness, value}
@@ -183,6 +191,13 @@ defmodule Qiron.Web do
     do: send_resp(conn, 503, "Panel disconnected or acknowledgment timed out")
 
   defp respond(conn, :rejected), do: send_resp(conn, 502, "Panel rejected command")
+
+  defp respond(conn, :invalid_preset_name),
+    do: send_resp(conn, 422, "Use a stack name of 1 to 48 characters on one line.")
+
+  defp respond(conn, :duplicate_preset_name),
+    do: send_resp(conn, 422, "A saved stack already has that name.")
+
   defp respond(conn, :invalid), do: send_resp(conn, 422, "Invalid command")
   defp respond(conn, :ok), do: respond(conn, %{ok: true})
 

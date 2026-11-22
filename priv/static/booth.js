@@ -2,26 +2,94 @@
 const modeNames = {gif: "GIF", blood: "Blood Futures", intro: "Introduction", crow: "Dr. Crow", beef: "Dr. Beef Supreme"};
 const gifDirectories = {gifK: "koyaanisqatsi", gifO: "obama", gifF: "flag", gifD: "drugs", gifJ: "joker", gifS: "spooky", gifB: "subgenius", gifT: "transparent", gifA: "aj", gifP: "blue", gifH: "hank"};
 const edits = new Map();
-let draft, timer, writeTask, failedEdit, portraitTake, switching = false;
+let draft, timer, writeTask, failedEdit, desiredPreset = null, switching = false, panelCurrent = false;
 
 function draftStatus() {
   if (!draft) return;
   const offline = draft.readiness === "offline";
   const statuses = {ready: "Draft preloaded on panel.", loading: "Preloading panel…", error: "Panel could not prepare this draft.", offline: "Panel offline · browser stage only."};
   el("discard-edits").hidden = !failedEdit;
-  el("draft-status").textContent = portraitTake ? "Taking " + modeNames[portraitTake] + " live…" : failedEdit ? "Draft has unsaved changes." : writeTask || edits.size ? "Saving draft…" :
-    (!draft.dirty ? "Draft matches live. " : "") + (statuses[draft.readiness] || "");
-  el("take-live").disabled = switching || !!writeTask || edits.size > 0 || !draft.dirty || !(offline || draft.ready);
-  for (const button of document.querySelectorAll("[data-portrait]")) {
-    button.disabled = switching || !!writeTask || edits.size > 0;
+  const selected = desiredPreset ?? draft.preset_id;
+  for (const button of el("preset-rail").children) {
+    const active = button.dataset.preset === selected;
+    button.setAttribute("aria-pressed", String(active));
+    button.tabIndex = active ? 0 : -1;
   }
-  el("brightness").disabled = !!portraitTake;
+  const status = desiredPreset ? "Loading " + presetName(desiredPreset) + "…" :
+    failedEdit ? "Draft has unsaved changes." :
+    writeTask || edits.size ? "Saving draft…" :
+    !panelCurrent ? "Reconnecting…" :
+    (!draft.dirty ? "Draft matches live. " : "") + (statuses[draft.readiness] || "");
+  if (el("draft-status").textContent !== status) el("draft-status").textContent = status;
+  el("take-live").disabled = switching || !panelCurrent || !!writeTask || edits.size > 0 || !draft.dirty || !(offline || draft.ready);
+  el("save-stack").disabled = switching || !panelCurrent || !el("stack-name").value.trim();
+  el("brightness").readOnly = switching;
   el("gif-controls").inert = switching;
   el("mixer").inert = switching;
-  for (const id of ["melt-live", "clear-live-fx"]) el(id).disabled = switching || liveFxBusy;
-  for (const button of document.querySelectorAll("[data-mode]")) {
-    button.disabled = switching;
-    button.setAttribute("aria-pressed", String(draft.mode === button.dataset.mode));
+  for (const id of ["melt-live", "clear-live-fx"]) el(id).disabled = liveFxBusy;
+}
+
+function presetName(id, mode) {
+  return draft.presets.find(preset => preset.id === id)?.name ?? modeNames[mode] ?? id;
+}
+
+function renderRail() {
+  const rail = el("preset-rail");
+  const buttons = new Map(Array.from(rail.children, button => [button.dataset.preset, button]));
+  draft.presets.forEach(({id, name}, index) => {
+    const button = buttons.get(id) ?? document.createElement("button");
+    buttons.delete(id);
+    button.type = "button";
+    button.dataset.preset = id;
+    if (button.textContent !== name) button.textContent = name;
+    if (rail.children[index] !== button) rail.insertBefore(button, rail.children[index] ?? null);
+  });
+  for (const button of buttons.values()) button.remove();
+}
+
+async function selectPreset(id) {
+  desiredPreset = id;
+  const alreadySwitching = switching;
+  switching = true;
+  draftStatus();
+  if (alreadySwitching) return;
+  try {
+    if (writeTask) await writeTask;
+    while (desiredPreset !== null) {
+      clearTimeout(timer);
+      let requested = desiredPreset;
+      await saveDraft(async () => {
+        do {
+          requested = desiredPreset;
+          await api("operator", {preset: requested});
+        } while (desiredPreset !== requested);
+      });
+      if (desiredPreset === requested || failedEdit) desiredPreset = null;
+    }
+  } finally {
+    switching = false;
+    draftStatus();
+  }
+}
+
+async function saveNamedStack(event) {
+  event.preventDefault();
+  const name = el("stack-name").value.trim();
+  if (!name || switching || !panelCurrent) return;
+  switching = true;
+  draftStatus();
+  try {
+    if (writeTask) await writeTask;
+    clearTimeout(timer);
+    await saveDraft(async () => {
+      await api("operator", {save_as: name});
+      if (el("stack-name").value.trim() === name) el("stack-name").value = "";
+      el("receipt").textContent = name + " saved.";
+    });
+  } finally {
+    switching = false;
+    if (desiredPreset !== null) selectPreset(desiredPreset);
+    else draftStatus();
   }
 }
 
@@ -44,6 +112,7 @@ async function flushEdits() {
       throw error;
     }
     if (edits.get(key) === payload) edits.delete(key);
+    if (failedEdit === key) failedEdit = null;
   }
 }
 
@@ -61,6 +130,7 @@ function saveDraft(afterSave) {
     try {
       renderBooth(await api("panel"));
     } catch {
+      panelCurrent = false;
       signal(false);
     }
   })().finally(() => {
@@ -117,16 +187,16 @@ function showVolatility(bps) {
 
 function renderBooth(data) {
   draft = data;
+  panelCurrent = true;
+  renderRail();
   if (!editingVolatility && !el("volatility").matches(":active")) {
     el("volatility").disabled = false;
     el("volatility").value = data.volatility_bps;
     showVolatility(data.volatility_bps);
   }
-  el("on-air").textContent = "On air · " + modeNames[data.live_mode];
+  el("on-air").textContent = "On air · " + presetName(data.live_preset_id, data.live_mode);
   el("panel-status").textContent = "USB " + data.status;
   el("panel-error").textContent = data.error || "";
-  el("blood-info").hidden = data.mode !== "blood";
-  el("intro-info").hidden = data.mode !== "intro";
   fieldValue("brightness", "brightness", data.brightness);
   el("gif-playback").textContent = !data.gif.playing ? "DRAFT · STOPPED" : data.gif.file ? "DRAFT · LOOP FILE" : "DRAFT · CYCLE FOLDER";
   fieldValue("gif-preset", "gif", data.gif.preset);
@@ -185,37 +255,26 @@ function initBooth() {
   el("gif-file").oninput = gifEdit;
   el("brightness").oninput = () => edit("brightness", {brightness: el("brightness").valueAsNumber});
   el("action").onchange = () => edit("action", {action: el("action").value || null});
-  for (const button of document.querySelectorAll("[data-mode]")) {
-    button.onclick = async () => {
-      if (switching || draft.mode === button.dataset.mode) return;
-      switching = true;
-      draftStatus();
-      if (writeTask) await writeTask;
-      clearTimeout(timer);
-      await saveDraft(() => api("operator", {mode: button.dataset.mode}));
-      switching = false;
-      draftStatus();
-    };
-  }
-  for (const button of document.querySelectorAll("[data-portrait]")) {
-    button.onclick = async () => {
-      const revision = draft.revision;
-      const mode = button.dataset.portrait;
-      switching = true;
-      portraitTake = mode;
-      el("receipt").textContent = "";
-      try {
-        await saveDraft(async () => {
-          await api("operator", {portrait: mode, revision});
-          el("receipt").textContent = modeNames[mode] + " taken live.";
-        });
-      } finally {
-        portraitTake = null;
-        switching = false;
-        draftStatus();
-      }
-    };
-  }
+  const rail = el("preset-rail");
+  rail.onclick = event => {
+    const button = event.target.closest("button[data-preset]");
+    if (button) selectPreset(button.dataset.preset);
+  };
+  rail.onkeydown = event => {
+    if (!draft || (event.target !== rail && !event.target.matches("button[data-preset]")) ||
+        event.altKey || event.metaKey || event.ctrlKey || event.shiftKey ||
+        !["ArrowDown", "ArrowUp"].includes(event.key)) return;
+    const buttons = Array.from(rail.children);
+    const current = event.target === rail ? rail.querySelector('[aria-pressed="true"]') : event.target;
+    const index = buttons.indexOf(current) + (event.key === "ArrowDown" ? 1 : -1);
+    const next = buttons[Math.max(0, Math.min(buttons.length - 1, index))];
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+    if (next !== current) selectPreset(next.dataset.preset);
+  };
+  el("stack-name").oninput = draftStatus;
+  el("save-stack-form").onsubmit = saveNamedStack;
   el("discard-edits").onclick = async () => {
     clearTimeout(timer);
     if (writeTask) await writeTask;
@@ -235,7 +294,7 @@ function initBooth() {
     const revision = draft.revision;
     await saveDraft(async () => {
       await api("operator", {take: revision});
-      el("receipt").textContent = modeNames[draft.mode] + " taken live.";
+      el("receipt").textContent = presetName(draft.preset_id, draft.mode) + " taken live.";
     });
   };
 }

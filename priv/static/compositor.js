@@ -251,6 +251,16 @@
     g.restore();
   }
 
+  function joinBanner(g, value, elapsed) {
+    g.fillStyle = "#080d1c";
+    g.fillRect(0, 0, width, 9);
+    if (!value) return;
+    const text = Array.from(value, ch => ch >= " " && ch <= "~" ? ch : "?").join("");
+    const span = text.length * fonts.small.w + 18;
+    for (let x = -(Math.floor(elapsed / 50) % span); x < width; x += span)
+      lettering(g, fonts.small, "#fff0a8", text, x, 1);
+  }
+
   function ticker(g, quotes, elapsed) {
     if (!quotes || !quotes.length) return;
     const labels = quotes.map(q => q.symbol + " " + (q.price_cents / 100).toFixed(2));
@@ -287,6 +297,18 @@
     g.putImageData(frame, 0, 0);
   }
 
+  let splicePhotos;
+  function loadSplicePhotos() {
+    if (!splicePhotos) {
+      splicePhotos = ["jfk", "911"].map(name => {
+        const img = new Image();
+        img.src = "/splice-" + name + ".png";
+        return img;
+      });
+    }
+    return splicePhotos;
+  }
+
   window.QyronCanvas = function (canvas) {
     canvas.width = width;
     canvas.height = height;
@@ -295,10 +317,12 @@
     const chartCanvas = surface(width, height);
     let scene, visible = [], layers = [], motion = [], request = 0, previousFrame = -Infinity;
     let destroyed = false;
+    let cueStart = 0, spliceStart = 0, splicePeriod = 0, lastSlot = 0;
 
     function render(now) {
       request = requestAnimationFrame(render);
       if (now - previousFrame < 32) return;
+      const gap = now - previousFrame;
       previousFrame = now;
       g.fillStyle = "#000";
       g.fillRect(0, 0, width, height);
@@ -311,6 +335,8 @@
           }
         } else if (id === "chart") {
           g.drawImage(chartCanvas, 0, 0);
+        } else if (id === "join") {
+          joinBanner(g, scene.join_banner, elapsed);
         } else if (id === "ticker") {
           ticker(g, scene.tickers, elapsed);
         } else if (Object.prototype.hasOwnProperty.call(films, id)) {
@@ -327,6 +353,23 @@
         }
       }
       if (scene.melt || scene.hue) effects(g, scene.melt || 0, scene.hue || 0, now);
+      if (scene.screen_cue) {
+        const elapsed = Math.max(0, now - cueStart);
+        if (elapsed < 10000) {
+          const kind = scene.screen_cue.kind === "crack" ? 1 : 2;
+          window.QyronScreenCues.draw(g, kind, Math.floor(elapsed), scene.screen_cue.seed);
+        }
+      }
+      if (splicePeriod) {
+        const elapsed = Math.max(0, now - spliceStart);
+        const slot = Math.floor(elapsed / splicePeriod);
+        if (slot > lastSlot) {
+          const photo = splicePhotos[(slot - 1) % 2];
+          if (gap < 200 && elapsed % splicePeriod < 160 && photo.complete && photo.naturalWidth)
+            g.drawImage(photo, 0, 0);
+          lastSlot = slot;
+        }
+      }
       if (scene.brightness != null && scene.brightness < 255) {
         g.fillStyle = "rgba(0,0,0," + (1 - scene.brightness / 255) + ")";
         g.fillRect(0, 0, width, height);
@@ -336,8 +379,21 @@
     return {
       update(nextScene) {
         if (destroyed) return;
-        scene = nextScene;
         const now = performance.now();
+        const cue = nextScene.screen_cue;
+        if (cue && (!scene || !scene.screen_cue || cue.seed !== scene.screen_cue.seed || cue.kind !== scene.screen_cue.kind))
+          cueStart = now - cue.elapsed_ms;
+        const period = (nextScene.splice_seconds || 0) * 1000;
+        if (period) {
+          loadSplicePhotos();
+          const epoch = now - nextScene.splice_elapsed_ms;
+          if (period !== splicePeriod || nextScene.splice_generation !== scene?.splice_generation) {
+            spliceStart = epoch;
+            lastSlot = Math.floor(nextScene.splice_elapsed_ms / period);
+          }
+        }
+        splicePeriod = period;
+        scene = nextScene;
         const widgets = scene.widgets || legacy[scene.mode] || [scene.mode];
         for (const id of started.keys()) if (!widgets.includes(id)) started.delete(id);
         for (const id of widgets) if (!started.has(id)) started.set(id, now);
