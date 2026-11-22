@@ -1,5 +1,6 @@
 defmodule Qiron.Market do
   use GenServer
+  alias Qiron.Display
 
   @slug 5_000_000
   @cooldown_ms 300_000
@@ -8,9 +9,11 @@ defmodule Qiron.Market do
             previous: 10000,
             held: false,
             players: %{},
-            lines: %{},
-            speeds: %{},
-            brightness: 255
+            display: %Display{},
+            draft: nil,
+            revision: 0,
+            pending_action: nil,
+            candles: []
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
   def call(command, server \\ __MODULE__), do: GenServer.call(server, command)
@@ -20,17 +23,30 @@ defmodule Qiron.Market do
 
     show =
       case File.read(path) do
-        {:ok, bytes} -> Map.merge(%__MODULE__{}, :erlang.binary_to_term(bytes, [:safe]))
+        {:ok, bytes} -> :erlang.binary_to_term(bytes, [:safe])
         {:error, :enoent} -> %__MODULE__{}
       end
 
     if Keyword.get(opts, :tick, true), do: Process.send_after(self(), :tick, 2000)
-    {:ok, persist(migrate_accounts(show), show, path)}
+
+    display =
+      Map.get_lazy(show, :display, fn ->
+        struct(Display, Map.take(show, [:lines, :speeds, :brightness]))
+      end)
+
+    next =
+      struct(__MODULE__, Map.delete(show, :__struct__))
+      |> Map.put(:display, display)
+      |> Map.put(:draft, Map.get(show, :draft) || display)
+
+    {:ok, persist(next |> migrate_accounts() |> record_mark(), show, path)}
   end
 
   def handle_info(:tick, {s, path}) do
     next =
-      if s.held, do: s, else: move(s, round(s.mark * (1 + (:rand.uniform(101) - 51) / 10000)))
+      if s.held,
+        do: record_mark(s),
+        else: move(s, round(s.mark * (1 + (:rand.uniform(101) - 51) / 10000)))
 
     Process.send_after(self(), :tick, 2000)
     {:noreply, persist(next, s, path)}
@@ -96,65 +112,67 @@ defmodule Qiron.Market do
     do: {move(s, round(s.mark * (1 + dir * 0.05))), :ok}
 
   defp apply_command(:panel, s) do
-    layers =
-      stage(s).layers ++
-        [%{id: 6, text: Map.get(s.lines, 6, ""), override: Map.get(s.lines, 6, "")}]
+    draft = scene(s.draft, s)
 
-    defaults = [10, 20, 40, 80, 120, 40]
-
-    layers =
-      Enum.zip_with(layers, defaults, fn l, speed ->
-        Map.put(l, :speed, Map.get(s.speeds, l.id, speed))
-      end)
-
-    {s, %{brightness: s.brightness, layers: layers}}
+    {s,
+     Map.merge(draft, %{
+       revision: s.revision,
+       dirty: s.draft != s.display or s.pending_action != nil,
+       live_mode: s.display.mode,
+       action: s.pending_action
+     })}
   end
 
-  defp apply_command({:line, layer, text}, s)
-       when layer in 1..6 and is_binary(text) and byte_size(text) <= 32767 do
-    if String.valid?(text) and not String.contains?(text, <<0>>) do
-      lines = if text == "", do: Map.delete(s.lines, layer), else: Map.put(s.lines, layer, text)
-      {%{s | lines: lines}, :ok}
-    else
-      {s, :invalid}
+  defp apply_command(:live_panel, s), do: {s, scene(s.display, s)}
+
+  defp apply_command({:take, rev}, %{revision: rev} = s) do
+    {%{s | display: s.draft, pending_action: nil, revision: rev + 1}, :ok}
+  end
+
+  defp apply_command({:take, _}, s), do: {s, :stale}
+
+  defp apply_command({:action, name}, s) do
+    case Display.cue(s.draft, name) do
+      {:ok, draft, action} -> edit(s, draft, action)
+      error -> {s, error}
     end
   end
 
-  defp apply_command({:speed, layer, speed}, s) when layer in 1..6 and speed in 0..255,
-    do: {%{s | speeds: Map.put(s.speeds, layer, speed)}, :ok}
+  defp apply_command(command, s) do
+    case Display.change(s.draft, command) do
+      {:ok, draft} ->
+        action = if draft.mode == s.draft.mode, do: s.pending_action
+        edit(s, draft, action)
 
-  defp apply_command({:brightness, value}, s) when value in 0..255,
-    do: {%{s | brightness: value}, :ok}
-
-  defp apply_command({:macro, name}, s) when name in ["clear", "clearText"] do
-    {%{s | lines: Map.merge(s.lines, Map.new(1..5, &{&1, ""}))}, :ok}
+      error ->
+        {s, error}
+    end
   end
 
-  defp apply_command({:macro, name}, s) when name in ["caw", "dopamine"] do
-    lines = Enum.with_index(macro_lines(name), 1) |> Map.new(fn {text, i} -> {i, text} end)
-    speeds = Map.new(1..5, &{&1, :rand.uniform(99)})
-    {%{s | lines: Map.merge(s.lines, lines), speeds: Map.merge(s.speeds, speeds)}, :ok}
+  defp edit(%{draft: draft, pending_action: action} = s, draft, action), do: {s, :ok}
+
+  defp edit(s, draft, action),
+    do: {%{s | draft: draft, pending_action: action, revision: s.revision + 1}, :ok}
+
+  defp record_mark(s) do
+    bucket = div(System.system_time(:second), 10) * 10
+    mark = s.mark
+
+    candles =
+      case s.candles do
+        [%{bucket: ^bucket} = current | history] ->
+          [
+            %{current | high: max(current.high, mark), low: min(current.low, mark), close: mark}
+            | history
+          ]
+
+        prior ->
+          candle = %{bucket: bucket, open: mark, high: mark, low: mark, close: mark}
+          [candle | Enum.filter(prior, &(&1.bucket < bucket and &1.bucket > bucket - 240))]
+      end
+
+    %{s | candles: candles}
   end
-
-  defp apply_command(_, s), do: {s, :invalid}
-
-  defp macro_lines("caw"),
-    do: [
-      "CAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAW",
-      "CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW",
-      "CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW CAW",
-      "CAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAWCAW",
-      "CAW"
-    ]
-
-  defp macro_lines("dopamine"),
-    do: [
-      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE ",
-      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE",
-      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE",
-      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE",
-      "DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE DOPAMINE"
-    ]
 
   defp move(s, cents) do
     mark = min(1_000_000, max(100, cents))
@@ -168,7 +186,7 @@ defmodule Qiron.Market do
           else: {id, p}
       end)
 
-    %{s | previous: s.mark, mark: mark, players: players}
+    record_mark(%{s | previous: s.mark, mark: mark, players: players})
   end
 
   defp fresh_player(mark),
@@ -232,29 +250,27 @@ defmodule Qiron.Market do
   end
 
   defp stage(s) do
+    live = scene(s.display, s)
+    %{live | layers: Enum.take(live.layers, 5)}
+  end
+
+  defp scene(display, s) do
     counts = Enum.frequencies_by(Map.values(s.players), & &1.side)
     up = Map.get(counts, "up", 0)
     down = Map.get(counts, "down", 0)
 
-    defaults = [
-      "CROW BLOOD  #{:erlang.float_to_binary(s.mark / 100, decimals: 2)}",
-      "UP  #{up}    DOWN  #{down}",
-      "TOO LATE SHOW",
-      "BLOOD",
-      "PERP"
-    ]
-
-    layers =
-      for {msg, i} <- Enum.with_index(defaults, 1),
-          do: %{id: i, text: Map.get(s.lines, i, msg), override: Map.get(s.lines, i, "")}
-
     %{
+      mode: display.mode,
+      gif: display.gif,
+      brightness: display.brightness,
+      mark_cents: s.mark,
+      candles: Enum.reverse(s.candles),
       mark: s.mark / 100,
       change: (s.mark - s.previous) / 100,
       up: up,
       down: down,
       held: s.held,
-      layers: layers
+      layers: Display.layers(display)
     }
   end
 end

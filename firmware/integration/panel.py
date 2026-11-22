@@ -26,11 +26,12 @@ with subprocess.Popen([sys.executable, bridge, device], stdin=subprocess.PIPE, s
     try:
         if read_bytes(usb.stdout, 1) != b"R":
             raise SystemExit("USB bridge did not open the device.")
-        for method, payload in [(12, bytes([64])), (6, bytes([0])), (0, struct.pack("<i", -1) + b"QYRON PI TEST")]:
+        for method, payload in [(40, bytes([0])), (41, bytes([12, 64])), (41, bytes([6, 0])),
+                                (41, bytes([0]) + struct.pack("<i", -1) + b"QYRON PI TEST"), (42, b"")]:
             usb.stdin.write(struct.pack("<BBH", 254, method, len(payload)) + payload)
             usb.stdin.flush()
             if read_bytes(usb.stdout, 2) != bytes([254, 0]):
                 raise SystemExit(f"Teensy rejected command {method}.")
     finally:
         usb.stdin.close()
-    print("Teensy acknowledged all three commands. Look for QYRON PI TEST on the middle row.")
+    print("Teensy acknowledged the prepared cue and TAKE. Look for QYRON PI TEST on the middle row.")

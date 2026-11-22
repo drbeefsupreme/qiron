@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Stage · Too Late TV</title>
     <link rel="stylesheet" href="/style.css" />
+    <script defer src="/stage.js"></script>
     <script defer src="/app.js"></script>
-    <script defer src="/specimen.js"></script>
   </head>
   <body data-view="stage">
     <header>
@@ -14,8 +14,9 @@
       <div class="feed"><em></em> <span id="signal">CONNECTING</span></div>
     </header>
     <main>
-      <div class="eyebrow">CHYRON / STAGE FEED</div>
-      <h1>Blood Futures<span>.</span></h1>
+      <div class="eyebrow">QYRON / STAGE FEED</div>
+      <h1><span id="stage-title">Stage display</span><span>.</span></h1>
+      <section id="stage-gif" hidden>
       <section class="board">
         <aside id="l4"></aside>
         <div>
@@ -25,9 +26,15 @@
         </div>
         <aside id="l5"></aside>
       </section>
-      <div class="stageinfo">
-        ORACLE MARK <b id="mark">…</b> <span id="movement"></span>
-      </div>
+      <p class="stageinfo" id="stage-file"></p>
+      </section>
+      <section id="stage-blood" hidden>
+        <div class="stageinfo quote"><div>ORACLE MARK <b id="mark">…</b></div><div>BULLISH <b id="bulls">0</b></div><div>BEARISH <b id="bears">0</b></div></div>
+        <figure class="chart"><canvas id="candles" width="288" height="108" role="img" aria-label="Price candlesticks"></canvas><figcaption>10-SECOND CANDLES <span>OPEN / HIGH / LOW / CLOSE</span></figcaption></figure>
+      </section>
+      <section id="stage-intro" hidden>
+        <img id="intro-screen" width="128" height="96" alt="Christmas telethon loop: CAW-IN hotline, PISS COIN mint, Santa tracker and Crow data feed">
+      </section>
       <p id="error" role="alert"></p>
     </main>
     <footer>TOO LATE SHOW <span>◆</span> CROWNET TERMINAL</footer>

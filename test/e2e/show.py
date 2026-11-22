@@ -58,7 +58,8 @@ class Panel:
                 del buffer[: 4 + length]
                 os.write(self.fd, b"\xfe")
                 time.sleep(0.002)
-                os.write(self.fd, b"\x00")
+                rejected = method == 41 and payload == b"\x27/gifs/joker/missing.gif"
+                os.write(self.fd, bytes([int(rejected)]))
                 with self.changed:
                     self.frames.append((method, payload))
                     self.changed.notify_all()
@@ -117,7 +118,36 @@ def rehearse(browser, url, password, panel):
         operator.get_by_role("button", name="Set price").click()
         expect(operator.locator("#mark")).to_have_text(value + ".00")
 
+    stage = browser.new_page()
+    stage.goto(url + "/stage")
+    expect(stage.locator("#stage-gif")).to_be_visible()
+    request = booth.request
+
+    def panel_state():
+        return request.get(url + "/api/panel").json()
+
+    def post(payload):
+        return request.post(url + "/api/operator", headers={"x-qiron": "1"}, data=payload)
+
+    def take(mode, online=True, keyboard=False):
+        start = len(panel.frames)
+        if keyboard:
+            operator.locator("#layer4").focus()
+            operator.keyboard.press("Alt+Enter")
+        else:
+            operator.locator("#take-live").click()
+        expect(stage.locator("#stage-" + mode)).to_be_visible()
+        if online:
+            panel.expect(42, b"", start)
+        assert request.get(url + "/api/stage").json()["mode"] == mode
+
     set_price("100")
+    start = len(panel.frames)
+    operator.locator("#mode-blood").click()
+    panel.expect(40, bytes([1]), start)
+    expect(stage.locator("#stage-gif")).to_be_visible()
+    assert (42, b"") not in panel.frames[start:]
+    take("blood")
     audience = [browser.new_page(viewport={"width": 390, "height": 844}) for _ in range(2)]
     for phone, side in zip(audience, ("up", "down")):
         phone.goto(url)
@@ -128,10 +158,16 @@ def rehearse(browser, url, password, panel):
         phone.locator("#" + side).click()
         expect(phone.locator("#side")).to_contain_text(side.upper())
     set_price("110")
-    stage = browser.new_page()
-    stage.goto(url + "/stage")
-    expect(stage.locator("#l2")).to_contain_text("UP  1    DOWN  1", use_inner_text=False)
-    panel.expect(0, struct.pack("<i", -1) + b"CROW BLOOD  110.00")
+    expect(stage.locator("#bulls")).to_have_text("1")
+    expect(stage.locator("#bears")).to_have_text("1")
+    expect(stage.locator("#mark")).to_have_text("110.00")
+    chart = request.get(url + "/api/stage").json()["candles"]
+    assert chart[-1]["close"] == 11000
+    with panel.changed:
+        assert panel.changed.wait_for(lambda: any(
+            method == 38 and data[:12] == struct.pack("<III", 11000, 1, 1)
+            and len(data) >= 28 and struct.unpack("<I", data[-4:])[0] == 11000
+            for method, data in panel.frames[start:]), timeout=10)
     for phone, value in zip(audience, ("300,000.00", "45,000.00")):
         expect(phone.locator("#balance")).to_have_text(value)
         phone.locator("#close").click()
@@ -152,50 +188,64 @@ def rehearse(browser, url, password, panel):
     assert long.request.post(url + "/api/refill", headers={"x-qiron": "1"}, data={}).status == 409
 
     cue = "Q" + "ab" * 16383
-    layer = operator.locator("#layer4")
-    layer.fill(cue)
-    layer.locator("xpath=ancestor::form").get_by_role("button", name="Save", exact=True).click()
-    panel.expect(3, struct.pack("<i", -1) + cue.encode())
-    expect(stage.locator("#l4")).to_have_text(cue)
-    expect(stage.locator("#mark")).to_be_in_viewport()
     start = len(panel.frames)
-    layer.fill("")
-    layer.locator("xpath=ancestor::form").get_by_role("button", name="Save", exact=True).click()
-    panel.expect(3, struct.pack("<i", -1) + b"BLOOD", start)
-    expect(stage.locator("#l4")).to_have_text("BLOOD")
-    for field, button, value, method in [
-        ("#speed6", "Set speed", 85, 11), ("#brightness", "Set brightness", 73, 12)
-    ]:
-        control = operator.locator(field)
-        start = len(panel.frames)
-        control.fill(str(value))
-        control.locator("xpath=ancestor::form").get_by_role("button", name=button).click()
-        panel.expect(method, bytes([value]), start)
+    operator.locator("#mode-gif").click()
+    operator.locator("#layer4").fill(cue)
+    operator.locator("#speed4").fill("85")
+    operator.locator("#brightness").fill("73")
+    path = "/gifs/joker/hotline.gif"
+    operator.locator("#gif-file").fill(path)
+    panel.expect(41, bytes([3]) + struct.pack("<i", -1) + cue.encode(), start)
+    panel.expect(41, bytes([9, 85]), start)
+    panel.expect(41, bytes([12, 73]), start)
+    panel.expect(41, bytes([39]) + path.encode(), start)
+    expect(stage.locator("#stage-blood")).to_be_visible()
+    expect(operator.locator("#take-live")).to_be_enabled()
+    assert (42, b"") not in panel.frames[start:]
+    assert post({"take": panel_state()["revision"] - 1}).status == 409
+    take("gif", keyboard=True)
+    expect(stage.locator("#l4")).to_have_text(cue)
+    expect(stage.locator("#stage-file")).to_contain_text("hotline.gif")
+
+    start = len(panel.frames)
+    operator.locator("#gif-file").fill("/gifs/joker/missing.gif")
+    panel.expect(41, bytes([39]) + b"/gifs/joker/missing.gif", start)
+    expect(operator.locator("#take-live")).to_be_disabled()
+    operator.keyboard.press("Alt+Enter")
+    assert request.get(url + "/api/stage").json()["gif"]["file"] == path
+    assert (42, b"") not in panel.frames[start:]
+    operator.locator("#gif-file").fill(path)
+    operator.locator("#mode-intro").click()
+    panel.expect(40, bytes([2]), start)
+    take("intro")
+    expect(stage.locator("#intro-screen")).to_be_visible()
     public = audience[0].request
     assert public.get(url + "/api/panel").status == 401
     assert public.post(url + "/api/operator", headers={"x-qiron": "1"},
                        data={"action": "gifJ"}).status == 401
     assert booth.request.post(url + "/api/operator", data={"action": "gifJ"}).status == 403
+    operator.locator("#mode-gif").click()
+    expect(operator.locator("#layer4")).to_have_value(cue)
     assert booth.request.post(url + "/api/operator", headers={"x-qiron": "1"},
                               data={"layer": 6, "text": cue + "x"}).status == 422
+    operator.locator("#action").select_option("hitShapes")
     start = len(panel.frames)
-    operator.locator("#action").select_option("nextGif")
-    operator.locator("#run-action").click()
-    panel.expect(21, b"", start)
+    expect(operator.locator("#take-live")).to_be_enabled()
+    take("gif")
+    panel.expect(41, bytes([16]))
+    assert (16, b"") not in panel.frames[start:]
 
     panel.detach()
-    expect(operator.locator("#panel-status")).to_have_text("USB disconnected", timeout=10000)
-    operator.locator("#run-action").click()
-    expect(operator.locator("#error")).to_contain_text("disconnected")
-    offline = operator.locator("#layer6")
-    offline.fill(cue)
-    offline.locator("xpath=ancestor::form").get_by_role("button", name="Save", exact=True).click()
-    expect(operator.locator("#receipt")).to_contain_text("Layer 6 saved")
+    expect(operator.locator("#panel-status")).to_contain_text("disconnected", ignore_case=True, timeout=10000)
+    operator.locator("#mode-intro").click()
+    take("intro", online=False)
     reconnected = len(panel.frames)
     panel.attach()
-    panel.expect(5, struct.pack("<i", -1) + cue.encode(), reconnected)
-    expect(operator.locator("#panel-status")).to_have_text("USB connected")
-    assert (21, b"") not in panel.frames[reconnected:]
+    panel.expect(40, bytes([2]), reconnected)
+    panel.expect(42, b"", reconnected)
+    expect(operator.locator("#panel-status")).to_contain_text("connected", ignore_case=True)
+    assert (41, bytes([16])) not in panel.frames[reconnected:]
+
 
 
 if __name__ == "__main__":

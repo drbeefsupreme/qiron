@@ -21,6 +21,7 @@ defmodule Qiron.MarketTest do
     assert :liquidated = call.({:trade, "a", "up", 1})
     assert :liquidated = call.({:refill, "a"})
     call.({:line, 4, "CAW"})
+    call.({:take, call.(:panel).revision})
     call.({:hold, true})
     stop_supervised!(Market)
     pid = start_supervised!({Market, opts})
@@ -29,7 +30,8 @@ defmodule Qiron.MarketTest do
     assert Enum.at(layers, 3).text == "CAW"
     assert %{side: "flat", piss_coin: 45_000.0} = Market.call({:account, "b"}, pid)
     assert :ok = Market.call({:line, 4, ""}, pid)
-    assert Enum.at(Market.call(:stage, pid).layers, 3).text == "BLOOD"
+    assert Enum.at(Market.call(:panel, pid).layers, 3).text == ""
+    assert Enum.at(Market.call(:stage, pid).layers, 3).text == "CAW"
   end
 
   @tag :tmp_dir
@@ -70,5 +72,87 @@ defmodule Qiron.MarketTest do
       assert %{side: "flat", piss_coin: 50_500.0} = Market.call({:account, "a"}, pid)
       stop_supervised!(Market)
     end
+  end
+
+  @tag :tmp_dir
+  test "upgrade restores old overlays; prepared scenes and candle data survive a restart", %{
+    tmp_dir: dir
+  } do
+    path = Path.join(dir, "show")
+
+    old = %{
+      __struct__: Market,
+      mark: 12000,
+      held: true,
+      previous: 12000,
+      players: %{},
+      brightness: 64,
+      speeds: %{4 => 7},
+      lines: %{4 => "CAW"}
+    }
+
+    File.write!(path, :erlang.term_to_binary(old))
+    opts = [path: path, tick: false]
+    pid = start_supervised!({Market, opts})
+    call = &Market.call(&1, pid)
+
+    assert %{mode: "gif", brightness: 64, layers: layers, dirty: false, revision: 0} =
+             call.(:panel)
+
+    assert %{text: "CAW", speed: 7} = Enum.at(layers, 3)
+    assert :invalid = call.({:gif, "gifJ", "/gifs/joker/../private.gif"})
+    assert :invalid = call.({:gif, "gifJ", "/gifs/flag/test.gif"})
+    assert :ok = call.({:gif, "gifJ", "/gifs/joker/telethon.gif"})
+    assert :ok = call.({:action, "hitShapes"})
+    assert :ok = call.({:take, 2})
+    assert %{gif: %{file: "/gifs/joker/telethon.gif"}, mode: "gif"} = call.(:stage)
+    assert %{action: nil, dirty: false} = call.(:panel)
+    assert :ok = call.({:mode, "intro"})
+    assert :wrong_mode = call.({:action, "hitShapes"})
+    assert :wrong_mode = call.({:line, 2, "later"})
+    assert :ok = call.({:brightness, 127})
+    assert :ok = call.({:mark, 13000})
+    assert :ok = call.({:mark, 11500})
+    assert :ok = call.({:mark, 12800})
+    assert %{mode: "gif", candles: bars, mark: 128.0} = call.(:stage)
+    assert List.first(bars).open == 12000
+    assert Enum.max_by(bars, & &1.high).high == 13000
+    assert Enum.min_by(bars, & &1.low).low == 11500
+    assert List.last(bars).close == 12800
+    assert :stale = call.({:take, 0})
+    stop_supervised!(Market)
+    pid = start_supervised!({Market, opts})
+    call = &Market.call(&1, pid)
+
+    assert %{mode: "intro", live_mode: "gif", dirty: true, revision: 5, brightness: 127} =
+             call.(:panel)
+
+    assert :ok = call.({:take, 5})
+    assert %{mode: "intro"} = call.(:stage)
+    assert :ok = call.({:mode, "blood"})
+    call.({:trade, "viewer", "down", 5})
+    assert :ok = call.({:take, 7})
+    assert %{mode: "blood", down: 1, candles: candles} = call.(:stage)
+    assert List.last(candles).close == 12800
+    assert :ok = call.({:mode, "gif"})
+    assert %{gif: %{file: "/gifs/joker/telethon.gif"}, layers: layers} = call.(:panel)
+    assert Enum.at(layers, 3).text == "CAW"
+  end
+
+  @tag :tmp_dir
+  test "old candles age out without backfilling missing observations", %{tmp_dir: dir} do
+    path = Path.join(dir, "show")
+    bucket = div(System.system_time(:second), 10) * 10
+
+    bars =
+      for ago <- [20, 240, 250],
+          do: %{bucket: bucket - ago, open: 100, high: 100, low: 100, close: 100}
+
+    File.write!(path, :erlang.term_to_binary(%Market{candles: bars}))
+    pid = start_supervised!({Market, path: path, tick: false})
+    assert %{candles: [earlier, current]} = Market.call(:stage, pid)
+    assert earlier.bucket == bucket - 20
+    assert current.bucket >= bucket
+    assert current.close == 10000
   end
 end

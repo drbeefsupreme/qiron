@@ -7,7 +7,7 @@ defmodule Qiron.Web do
   plug(Plug.Static,
     at: "/",
     from: {:qiron, "priv/static"},
-    only: ~w(style.css app.js specimen.js)
+    only: ~w(style.css app.js specimen.js booth.js stage.js telethon.gif)
   )
 
   plug(:match)
@@ -21,12 +21,7 @@ defmodule Qiron.Web do
   get("/api/stage", do: respond(conn, Market.call(:stage)))
 
   get "/api/panel" do
-    panel = Market.call(:panel)
-
-    respond(
-      conn,
-      Map.merge(panel, %{status: Qiron.Panel.status(), actions: Qiron.Panel.actions()})
-    )
+    respond(conn, Qiron.Panel.status())
   end
 
   get "/api/me" do
@@ -62,6 +57,15 @@ defmodule Qiron.Web do
         %{"mark" => mark} when is_number(mark) and mark >= 1 and mark <= 10_000 ->
           {:mark, round(mark * 100)}
 
+        %{"mode" => mode} ->
+          {:mode, mode}
+
+        %{"take" => revision} when is_integer(revision) ->
+          {:take, revision}
+
+        %{"gif" => %{"preset" => preset, "file" => file}} ->
+          {:gif, preset, file}
+
         %{"brightness" => value} ->
           {:brightness, value}
 
@@ -69,7 +73,7 @@ defmodule Qiron.Web do
           {:speed, i, speed}
 
         %{"action" => name} ->
-          {:panel_action, name}
+          {:action, name}
 
         %{"layer" => i, "text" => t} ->
           {:line, i, t}
@@ -80,8 +84,9 @@ defmodule Qiron.Web do
 
     result =
       case command do
-        {:panel_action, name} -> Qiron.Panel.action(name)
-        other -> Market.call(other)
+        {kind, _} when kind in [:mark, :nudge, :hold] -> Market.call(command)
+        :invalid -> :invalid
+        other -> Qiron.Panel.command(other)
       end
 
     respond(conn, result)
@@ -142,6 +147,13 @@ defmodule Qiron.Web do
          ), id}
     end
   end
+
+  defp respond(conn, :wrong_mode), do: send_resp(conn, 409, "This control belongs to GIF mode.")
+
+  defp respond(conn, :stale),
+    do: send_resp(conn, 409, "Draft changed. Refresh before taking live.")
+
+  defp respond(conn, :not_ready), do: send_resp(conn, 409, "Draft is not ready on the panel.")
 
   defp respond(conn, :liquidated),
     do: send_resp(conn, 409, "Claim your next slug when the cooldown ends.")

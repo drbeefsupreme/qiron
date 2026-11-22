@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Operator booth · Too Late TV</title>
     <link rel="stylesheet" href="/style.css" />
+    <script defer src="/booth.js"></script>
     <script defer src="/app.js"></script>
-    <script defer src="/specimen.js"></script>
   </head>
   <body data-view="operator">
     <header>
@@ -17,8 +17,45 @@
       <div class="eyebrow">DOCTOR BEEF SUPREME</div>
       <h1>Operator booth<span>.</span></h1>
       <section class="ticket">
+        <div class="tickethead"><h2>Prepare QYRON</h2><b id="panel-status">Connecting…</b></div>
+        <p id="on-air">On air · …</p>
+        <div class="modes" role="group" aria-label="Draft display mode">
+          <button id="mode-gif" data-mode="gif" aria-pressed="false" disabled>GIF</button>
+          <button id="mode-blood" data-mode="blood" aria-pressed="false" disabled>Blood Futures</button>
+          <button id="mode-intro" data-mode="intro" aria-pressed="false" disabled>Introduction</button>
+        </div>
+        <p id="intro-info" hidden>Christmas Telethon · 24-second continuous loop</p>
+        <p id="blood-info" hidden>Live oracle mark, 10-second candles and open bullish and bearish positions.</p>
+        <div class="setting"><label>Brightness (0–255)<input id="brightness" type="number" min="0" max="255" required></label></div>
+        <div class="take-bar">
+          <button type="button" id="take-live" aria-keyshortcuts="Alt+Enter" disabled>Take live <kbd>Alt+Enter</kbd></button>
+          <span id="draft-status" role="status">Loading draft…</span>
+          <button id="discard-edits" type="button" hidden>Discard unsaved edits</button>
+        </div>
+        <p id="panel-error" role="status"></p>
+        <a class="preview-link" href="/stage" target="_blank" rel="noopener">Open stage display ↗</a>
+      </section>
+      <p id="receipt" role="status"></p>
+      <p id="error" role="alert"></p>
+      <div id="gif-controls" hidden>
+        <section class="ticket">
+          <div class="tickethead"><h2>GIF playback</h2><small id="gif-playback"></small></div>
+          <div id="gif-form" class="settings">
+            <label>SD folder<select id="gif-preset"></select></label>
+            <label>Specific GIF (optional)<input id="gif-file" type="text" maxlength="240" autocomplete="off" spellcheck="false" aria-describedby="gif-hint"></label>
+          </div>
+          <p id="gif-hint">Enter the full path to a file on the Teensy SD card. Leave it empty to cycle the folder.</p>
+          <label>Effect or macro for this take<select id="action"></select></label>
+        </section>
+        <section class="ticket">
+          <h2>Scrolling layers</h2>
+          <p>Each layer holds up to 32,767 UTF-8 bytes.</p>
+          <div id="layers"></div>
+        </section>
+      </div>
+      <section class="ticket">
         <div class="tickethead">
-          <h2>Oracle mark</h2>
+          <h2>Live oracle mark</h2>
           <b id="mark">…</b>
         </div>
         <p id="marketmeta"></p>
@@ -40,21 +77,6 @@
           ><button>Set price</button>
         </form>
       </section>
-      <section class="ticket">
-        <div class="tickethead"><h2>QYRON panel</h2><b id="panel-status">Connecting…</b></div>
-        <form id="set-brightness"><label>Brightness (0–255)<input id="brightness" type="number" min="0" max="255" required></label><button>Set brightness</button></form>
-        <form id="panel-action"><label>Effects, GIFs and macros<select id="action"></select></label><button id="run-action">Run</button></form>
-      </section>
-      <section class="ticket">
-        <h2>Scrolling layers</h2>
-        <p>
-          Save a line to override its feed. Save an empty line to restore it. Each layer holds up to 32,767 UTF-8 bytes.
-        </p>
-        <div id="layers"></div>
-      </section>
-      <p id="receipt" role="status"></p>
-      <a href="/stage">Open stage display ↗</a>
-      <p id="error" role="alert"></p>
     </main>
     <footer>TOO LATE SHOW <span>◆</span> CROWNET TERMINAL</footer>
   </body>

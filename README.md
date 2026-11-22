@@ -15,9 +15,12 @@ mix run --no-halt
 
 The password prompt above uses zsh. In Bash use `read -rs -p 'Booth password: ' OPERATOR_PASSWORD`. Open `http://localhost:4000` on the server. On a phone connected to the same Wi-Fi, use the server’s LAN address and port 4000. Sign into the booth with username `beef` and the password you set.
 
-1. Open the audience page in two browsers. Call up on one and down on the other.
-2. In the booth, hold the drift and set the price. Both phones update their balances. The stage shows the mark and the up/down counts.
-3. Enter a cue in one of the five stage layer fields and save it. Clear the field and save again to resume its automatic feed.
+1. Open `/operator` and `/stage` in separate windows. In the booth, select **Introduction**. The stage keeps its current picture while the booth prepares the telethon loop.
+2. Press the red **Take live** button or **Alt+Enter** anywhere in the booth, including a text field. The button and shortcut are active once a changed draft is ready. With USB disconnected you can take the draft to the browser stage for a laptop rehearsal.
+3. Prepare **GIF**, choose a folder or enter a full SD path such as `/gifs/joker/hotline.gif`, and type the five scrolls. You can also set their speeds, brightness and an optional feature line or effect. Take the cue when you want those changes on air. The browser stage shows the overlay text and identifies the SD selection. The Teensy plays the SD file.
+4. Prepare and take **Blood Futures**. Hold the drift and set the mark to 100. Open two audience seats in separate browser profiles and call opposite directions at 1×. Set the mark to 110. The stage shows the price, candles, one bull and one bear. The seats show 55,000 and 45,000 PISS COIN.
+
+The 24-second Introduction loop draws four scenes on the LEDs: a ringing CAW-IN switchboard, the PISS COIN mint, a North Pole tracker following an off-route reindeer, and Crow’s overloaded data feed dissolving into Christmas television snow. The browser plays an animation generated from the same firmware drawing code. To regenerate it after changing the artwork, build the firmware and run `bash firmware/preview/render.sh` on a machine with a C++ compiler and FFmpeg.
 
 ## Game rules
 
@@ -35,7 +38,7 @@ MIX_ENV=prod mix release
 _build/prod/rel/qiron/bin/qiron start
 ```
 
-The market process serializes trades and operator commands. It writes price, seats, and layer overrides to a single snapshot before acknowledging changes. Restarting restores that show. Point `SHOW_FILE` at a fresh path to rehearse a separate show. The default path is `data/show.etf`.
+The market process serializes trades and operator commands. It writes the market, seats, candles, on-air display, prepared draft and draft revision to a single snapshot. Restarting restores that show. Point `SHOW_FILE` at a fresh path to rehearse a separate show. The default path is `data/show.etf`.
 
 ## Run the booth on the Raspberry Pi 4
 
@@ -43,9 +46,15 @@ Run the Elixir application on the Pi that has the Teensy plugged into USB. The s
 
 The controller opens `/dev/ttyACM0`. To select a stable device name, set `QYRON_DEVICE` to the Teensy symlink under `/dev/serial/by-id/` before starting the app. Run only one controller on the port. Stop the running controller before flashing over USB.
 
-In `/operator`, the USB status shows the panel connection. The six layers have independent text and speed controls. The first five normally carry the show feed. Saving an empty field restores that feed for its layer. The sixth field drives the feature layer. Text accepts up to 32,767 UTF-8 bytes per layer. The panel uses its existing bitmap fonts. The booth also controls brightness, CAW, DOPAMINE, clearing, backgrounds, blinking, shapes, pixels, and GIF playback. Choose a cue and press **Run**.
+## How the booth stages a cue
 
-Text, speed and brightness settings survive a disconnect and a show restart. The controller resends them when the panel reconnects. One-shot effects require a live connection. If a cue times out, check the panel before repeating it. The device may have acted before its reply was lost. The audience and browser stage work while the panel is unplugged.
+The Pi owns the show state. `Qiron.Display` holds the mode, brightness and GIF settings, including the five scrolling layers and feature layer F. Each layer accepts up to 32,767 UTF-8 bytes. `Qiron.Market` keeps two display records in the show snapshot, one on air and one for the next take. It also aggregates the last four minutes of ten-second OHLC bars. Trading and the operator’s mark controls stay live in every display mode.
+
+Editing the booth increments the draft revision. `Qiron.Panel` sends the settings to a staging buffer on the Teensy while the current mode continues running. A newer revision supersedes the previous preload. For a specific SD filename, the Teensy opens the file and decodes its first frame before reporting ready. A bad file path leaves the live cue running and the booth shows the error. Selecting an empty or missing folder allows a text-only scene.
+
+**Take live** or **Alt+Enter** activates the prepared revision. The Teensy applies the staged mode, text, speeds, brightness and queued effect together, and the Pi publishes the new on-air scene after the Teensy acknowledges. In Blood Futures mode the Pi sends price, open-position counts and candle updates as they change. The Teensy draws the candle bodies and wicks directly into the 128 × 96 background layer.
+
+A disconnected booth can take a scene to the browser stage. When USB returns, the controller restores the saved on-air settings, then prepares any different draft. One-shot effects run only on a connected take and are never replayed during recovery. If the connection drops in the middle of a take, check the booth’s on-air status after it reconnects.
 
 ## Build the Teensy 4.1 firmware
 
@@ -69,12 +78,18 @@ The Pi and Teensy use one framed binary protocol over USB serial. Flash the new 
 | 6–11 | Set scroll speed on the corresponding layer | One byte |
 | 12 | Set brightness | One byte |
 | 13–36 | Demo, shapes, pixels, backgrounds, blink, GIF controls and presets, clear loops | Empty |
+| 37 | Activate mode directly | One byte: 0 = GIF, 1 = Blood Futures, 2 = Introduction |
+| 38 | Update Blood Futures | Little-endian uint32 mark in cents, bulls, bears, then 1–24 OHLC tuples in cents, oldest first |
+| 39 | Loop a specific SD GIF | Full path under the selected `/gifs/` folder, up to 240 bytes |
+| 40 | Begin a new staged scene | Mode byte |
+| 41 | Preload a field | One-byte field method followed by its normal payload |
+| 42 | Take the prepared scene | Empty |
 
-`GET /api/stage` remains public and returns the mark, change, drift hold flag, position counts, and five ordered layer records. The booth reads the authenticated `GET /api/panel` for device status, six layer settings, brightness and action names.
+`GET /api/stage` exposes the on-air display, current mark, open counts and candles. The authenticated `GET /api/panel` exposes the draft, its revision, the on-air mode and preload status. A booth edit posts to `/api/operator`; a take posts `{"take": revision}` to that endpoint. A stale revision returns HTTP 409.
 
 ## Verification
 
-Run `mix test` for the market integration check. On Linux, the browser rehearsal starts its own server with a temporary snapshot and booth password, opens independent audience seats and attaches a simulated Teensy over a pseudo-terminal. Install the test-only browser dependency in a virtual environment:
+Run `mix test` for the market, snapshot and display integration checks. On Linux, the browser rehearsal starts its own server with a temporary snapshot and booth password, opens independent audience seats and attaches a simulated Teensy over a pseudo-terminal. Install the test-only browser dependency in a virtual environment:
 
 ```sh
 python3 -m venv /tmp/qiron-browser
@@ -83,7 +98,7 @@ python3 -m venv /tmp/qiron-browser
 /tmp/qiron-browser/bin/python test/e2e/show.py
 ```
 
-Set `CHROMIUM` to use an already-installed Chrome or Chromium executable. The test operates the booth, verifies two opposite positions against the same mark, and checks the serial bytes for a full-size cue.
+Set `CHROMIUM` to use an already-installed Chrome or Chromium executable. The test operates the booth, verifies two opposite positions against the same mark, and checks that a full-size cue stays off air until Alt+Enter. It also checks missing-file rejection, offline takes and USB reconnect.
 
 Run the firmware parser integration check on Linux with Python 3 and a C++17 compiler. It sends fragmented and maximum-size cues over a pseudo-terminal, checks accepted and rejected replies, and verifies that unframed input has no effect.
 
@@ -101,6 +116,6 @@ ls -l /dev/serial/by-id/
 python3 firmware/integration/panel.py /dev/ttyACM0
 ```
 
-Substitute the Teensy’s actual device path in the last command. Run this check with the booth stopped. It uses only Python 3, sets brightness to 64 out of 255, sets the middle row speed to zero and displays **QYRON PI TEST**. Three acknowledgments establish USB communication. Seeing those words on the board also tests the display output. Starting the booth restores its saved settings.
+Substitute the Teensy’s actual device path in the last command. Run this check with the booth stopped. It uses only Python 3, sets brightness to 64 out of 255, sets the middle row speed to zero and displays **QYRON PI TEST**. Five acknowledgments cover the prepared cue and take. Seeing those words on the board also tests the display output. Starting the booth restores its saved settings.
 
-For the web test, start the application using the rehearsal instructions above. On a phone connected to the Pi’s LAN, open the booth and check for **USB connected**. Select a GIF preset with a known file on the SD card. Hold the drift and set the mark to 100. Open independent audience seats and call opposite directions. Set the mark to 110. Check the physical ticker and verify that the two balances are 55,000 and 45,000 PISS COIN at 1×.
+For the physical rehearsal, follow the four booth steps above with **USB connected**. Watch the LEDs while typing a cue. They should keep the current scene until you see **Draft preloaded on panel** and press **Alt+Enter** or **Take live**. Check the exact GIF and all five scroll orientations, the bull/bear counts and candle movement, and a full 24-second Introduction cycle.
