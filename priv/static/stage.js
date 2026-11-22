@@ -1,55 +1,55 @@
 "use strict";
-const stageTitles = {gif: "GIF mode", blood: "Blood Futures", intro: "Christmas Telethon", crow: "Dr. Crow", beef: "Dr. Beef Supreme"};
-let activeMode;
+const stageTitles = {gif: "GIF mode", blood: "Blood Futures", intro: "Christmas Telethon",
+  crow: "Dr. Crow", beef: "Dr. Beef Supreme", peter: "Peter Thiel", santa: "Santa"};
+const stageSource = {gif: "sd", blood: "chart", intro: "intro", crow: "crow", beef: "beef",
+  peter: "peter", santa: "santa"};
+const stageLines = ["line1", "line2", "line3", "line4", "line5", "lineF"];
+const stageCanvas = window.QyronCanvas(document.getElementById("stage-canvas"));
+const stageText = document.querySelector("#stage-scrolls dl");
+stageLines.forEach((id, i) => {
+  const term = document.createElement("dt"), value = document.createElement("dd");
+  term.textContent = i === 5 ? "Feature line" : "Line " + (i + 1);
+  value.id = "l" + (i + 1);
+  stageText.append(term, value);
+});
+
+const widgetNames = {sd: "Panel SD", chart: "Blood Futures", ticker: "Ticker", ...stageTitles};
+let previousWidgets;
 
 function renderStage(data) {
-  if (data.mode !== activeMode) {
-    activeMode = data.mode;
-    for (const mode of Object.keys(stageTitles))
-      el("stage-" + mode).hidden = mode !== activeMode;
-    el("stage-title").textContent = stageTitles[activeMode];
-    for (const img of document.querySelectorAll(".stage-animation")) {
-      if (img.parentElement.id === "stage-" + activeMode) {
-        img.src = img.dataset.file + "?start=" + Date.now();
-      } else {
-        img.removeAttribute("src");
-      }
-    }
+  const widgets = data.widgets || (data.mode === "gif" ? ["sd", ...stageLines] : [stageSource[data.mode]]);
+  stageCanvas.update(data);
+  const title = stageTitles[data.mode] || "Stage mix";
+  el("stage-title").textContent = title;
+  el("stage-canvas").setAttribute("aria-label", title + " · on-air composition");
+  const order = widgets.join(",");
+  if (order !== previousWidgets) {
+    previousWidgets = order;
+    const caption = el("stage-layers");
+    caption.textContent = widgets.length ? "" : "Empty stage";
+    widgets.forEach((id, i) => {
+      if (i) caption.append(" / ");
+      const label = document.createElement("span");
+      label.textContent = widgetNames[id] || (id === "lineF" ? "Feature line" : "Line " + id.slice(4));
+      if (stageSource[id] === id) label.id = "stage-" + id;
+      caption.append(label);
+    });
+    el("stage-gif").hidden = !widgets.includes("sd");
+    el("stage-blood").hidden = !widgets.includes("chart");
   }
-  if (activeMode === "gif") {
-    for (const layer of data.layers) {
-      const line = el("l" + layer.id);
-      if (line) line.textContent = layer.text;
-    }
-    el("stage-file").textContent = data.gif.playing === false ? "SD playback stopped" :
-      "Panel SD playback · " + (data.gif.file || "preset " + data.gif.preset);
-  }
-  if (activeMode === "blood") {
-    el("bulls").textContent = data.up;
-    el("bears").textContent = data.down;
-    drawCandles(data.candles);
-  }
-}
-
-function drawCandles(candles) {
-  const canvas = el("candles"), g = canvas.getContext("2d");
-  const w = canvas.width, h = canvas.height, left = 4, right = w - 50;
-  g.fillStyle = "#151d1d";
-  g.fillRect(0, 0, w, h);
-  if (!candles.length) return;
-  const low = Math.min(...candles.map(c => c.low)), high = Math.max(...candles.map(c => c.high));
-  const y = price => high === low ? Math.floor(h / 2) : Math.round(9 + (high - price) / (high - low) * (h - 19));
-  g.fillStyle = "#3f514e";
-  for (const row of [9, h >> 1, h - 10]) g.fillRect(left, row, right - left, 1);
-  g.font = "8px monospace";
-  g.fillStyle = "#d4ded1";
-  g.fillText((high / 100).toFixed(2), right + 4, high === low ? y(high) + 3 : 12);
-  if (high !== low) g.fillText((low / 100).toFixed(2), right + 4, h - 7);
-  candles.forEach((c, i) => {
-    const x = right - 5 - Math.round((candles.length - 1 - i) * (right - left) / 24);
-    g.fillStyle = c.close >= c.open ? "#82d8ac" : "#ff846e";
-    g.fillRect(x, y(c.high), 1, y(c.low) - y(c.high) + 1);
-    g.fillRect(x - 2, Math.min(y(c.open), y(c.close)), 5, Math.abs(y(c.open) - y(c.close)) + 1);
+  const gif = data.gif || {};
+  el("stage-file").textContent = gif.playing === false ? "SD playback stopped" :
+    "Panel SD playback · " + (gif.file || "preset " + gif.preset) + " · Media is available on the physical panel only.";
+  el("bulls").textContent = data.up;
+  el("bears").textContent = data.down;
+  let hasText = false;
+  stageLines.forEach((id, i) => {
+    const layer = (data.layers || []).find(item => item.id === i + 1);
+    const text = widgets.includes(id) && layer ? layer.text : "";
+    const value = el("l" + (i + 1));
+    if (value.textContent !== text) value.textContent = text;
+    value.hidden = value.previousElementSibling.hidden = !text;
+    if (text) hasText = true;
   });
-  canvas.setAttribute("aria-label", "10-second candles. Low " + fmt(low / 100) + ", high " + fmt(high / 100));
+  el("stage-scrolls").hidden = !hasText;
 }

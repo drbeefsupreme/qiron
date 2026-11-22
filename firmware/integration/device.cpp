@@ -35,6 +35,19 @@ void display::setChart(const Chart& c) {
     fprintf(stderr, "chart %u %u %u %u %u\n", c.mark, c.bullish, c.bearish, c.count, c.candles[c.count-1].close);
 }
 
+void display::setQuotes(const uint32_t* cents) {
+    fprintf(stderr, "quotes");
+    for (unsigned i = 0; i < 6; ++i) fprintf(stderr, " %u", cents[i]);
+    fputc('\n', stderr);
+}
+void display::setStack(const Stack& stack) {
+    fprintf(stderr, "stack %u %u", stack.melt, stack.hue);
+    for (unsigned i = 0; i < stack.count; ++i) fprintf(stderr, " %u", stack.ids[i]);
+    fputc('\n', stderr);
+}
+void display::setFx(uint8_t melt, uint8_t hue) {
+    fprintf(stderr, "fx %u %u\n", melt, hue);
+}
 void display::beginTake() { fprintf(stderr, "beginTake\n"); }
 void display::endTake() { fprintf(stderr, "endTake\n"); }
 void display::cancelFile() {}

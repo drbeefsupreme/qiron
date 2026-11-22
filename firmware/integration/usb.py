@@ -74,6 +74,41 @@ with tempfile.TemporaryDirectory() as work:
                     for field in fields:
                         send(41, bytes([field]))
                     send(42, b"")
+                quotes = struct.pack("<6I", 0, 5, 48, 7816, 255, 4294967295)
+                send(43, quotes)
+                send(43, quotes[:-1], False)
+                send(43, quotes + b"x", False)
+                send(44, bytes([0, 100, *range(14)]))
+                for layout in ([0], [0, 0, 14], [0, 0, 5, 5], [101, 0], [0, 101],
+                               [0, 0, *range(15)]):
+                    send(44, bytes(layout), False)
+                send(45, bytes([101, 0]), False)
+                send(45, bytes([0, 101]), False)
+                send(45, bytes([0]), False)
+                for layout, field in [([8], [39, *b"/gifs/joker/caw.gif"]), ([0], [38, *chart]),
+                                      ([9], [0, *bytes(5)]), ([9], [8, 42]), ([3], [43, *quotes]),
+                                      ([0], [45, 1, 2]), ([0], [44, 3, 4])]:
+                    send(40, bytes([1]))
+                    send(41, bytes([44, 0, 0, *layout]))
+                    send(41, bytes(field), False)
+                    send(42, b"", False)
+                for widget in (1, 7):
+                    send(40, bytes([0]))
+                    send(41, bytes([44, 0, 0, widget]))
+                    send(42, b"", False)
+                send(40, bytes([1]))
+                send(41, bytes([44, 0, 100]))
+                send(42, b"")
+                send(40, bytes([4]))
+                send(41, bytes([44, 10, 20, 0, 5, 6, 9, 1, 7]))
+                send(41, bytes([39]) + b"/gifs/joker/caw.gif")
+                send(41, bytes([38]) + chart)
+                send(41, bytes([43]) + quotes)
+                send(41, bytes([7, 42]))
+                send(41, bytes([1]) + struct.pack("<i", -1) + b"SCROLL")
+                send(43, bytes(24))
+                send(45, bytes([100, 0]))
+                send(42, b"")
         finally:
             os.close(slave)
             os.close(master)
@@ -90,6 +125,12 @@ with tempfile.TemporaryDirectory() as work:
             b"speed 0 42", b"start 0 -1 SHOW", b"effect 17", b"brightness 90", b"endTake",
             b"beginTake", b"mode 0", b"source 1  1", b"endTake",
             b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake",
-            b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake"
+            b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake",
+            b"quotes 0 5 48 7816 255 4294967295", b"stack 0 100 0 1 2 3 4 5 6 7 8 9 10 11 12 13",
+            b"beginTake", b"mode 1", b"stack 0 100", b"endTake",
+            b"quotes 0 0 0 0 0 0", b"fx 100 0", b"beginTake", b"mode 4",
+            b"stack 10 20 0 5 6 9 1 7", b"source -1 /gifs/joker/caw.gif 0",
+            b"chart 12300 92 4 1 12300", b"quotes 0 5 48 7816 255 4294967295",
+            b"speed 1 42", b"start 1 -1 SCROLL", b"endTake"
         ]
 print("Framed USB protocol passed over a pseudo-terminal")

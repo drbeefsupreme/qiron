@@ -16,7 +16,9 @@ static uint16_t length, offset;
 static uint8_t payload[maxText + 6];
 struct Draft {
     display::Mode mode;
-    bool ready, hasChart, stopped;
+    bool ready, hasFields, hasStack, hasChart, hasQuotes, stopped;
+    display::Stack stack;
+    uint32_t quotes[6];
     int brightness, preset, effect;
     int speeds[6];
     int32_t repeats[6];
@@ -49,6 +51,8 @@ static bool fieldLength(uint8_t id, uint16_t size) {
     if (id <= 36) return size == 0;
     if (id == 38) return size >= 28 && size <= 396 && (size - 12) % 16 == 0;
     if (id == 39) return size > 0 && size <= 240;
+    if (id == 43) return size == 24;
+    if (id == 44) return size >= 2 && size <= 16;
     return false;
 }
 
@@ -56,6 +60,7 @@ static bool validLength() {
     if (method == 37 || method == 40) return length == 1;
     if (method == 41) return length >= 1 && length <= maxText + 5;
     if (method == 42) return length == 0;
+    if (method == 45) return length == 2;
     return fieldLength(method, length);
 }
 
@@ -83,10 +88,27 @@ static bool validPath(const char* path, uint16_t size) {
         strlen(filename+1) > 4 && !strcasecmp(path+size-4, ".gif");
 }
 
+static bool includes(uint8_t widget) {
+    if (draft.hasStack) return memchr(draft.stack.ids, widget, draft.stack.count) != nullptr;
+    if (draft.mode == display::Mode::gif) return widget == 0 || widget >= 8;
+    return draft.mode == display::Mode::blood && (widget == 1 || widget == 7);
+}
+
+static bool acceptsField(uint8_t id) {
+    if (id == 44) return !draft.hasFields;
+    if (id == 12) return true;
+    if (id < 12) return includes(8 + id % 6);
+    if (id == 38) return includes(1);
+    if (id == 43) return includes(7);
+    return includes(0);
+}
+
 static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
     if (!fieldLength(id, size)) return false;
-    if (staged && id != 12 && ((id == 38 && draft.mode != display::Mode::blood) ||
-        (id != 38 && draft.mode != display::Mode::gif))) return false;
+    if (staged) {
+        if (!acceptsField(id)) return false;
+        draft.hasFields = true;
+    }
     if (id < 6) {
         const char* value = reinterpret_cast<char*>(bytes+4);
         int32_t repeats = static_cast<int32_t>(word(bytes));
@@ -118,6 +140,27 @@ static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
             draft.chart = chart;
             draft.hasChart = true;
         } else display::setChart(chart);
+    } else if (id == 43) {
+        uint32_t quotes[6];
+        for (unsigned i = 0; i < 6; ++i) quotes[i] = word(bytes + 4*i);
+        if (staged) {
+            memcpy(draft.quotes, quotes, sizeof(quotes));
+            draft.hasQuotes = true;
+        } else display::setQuotes(quotes);
+    } else if (id == 44) {
+        if (bytes[0] > 100 || bytes[1] > 100) return false;
+        display::Stack stack{};
+        stack.melt = bytes[0];
+        stack.hue = bytes[1];
+        for (unsigned i = 2; i < size; ++i) {
+            uint8_t widget = bytes[i];
+            if (widget >= sizeof(stack.ids) || memchr(stack.ids, widget, stack.count)) return false;
+            stack.ids[stack.count++] = widget;
+        }
+        if (staged) {
+            draft.stack = stack;
+            draft.hasStack = true;
+        } else display::setStack(stack);
     } else {
         const char* path = reinterpret_cast<char*>(bytes);
         if (!validPath(path, size)) return false;
@@ -129,12 +172,15 @@ static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
 }
 
 static bool take() {
-    if (!draft.ready || (draft.mode == display::Mode::blood && !draft.hasChart)) return false;
+    if (!draft.ready || (includes(1) && !draft.hasChart)) return false;
+    if (draft.hasStack && includes(7) && !draft.hasQuotes) return false;
     if (*draft.path && !display::prepareFile(draft.path)) return false;
     display::beginTake();
     display::setMode(draft.mode);
-    if (draft.mode == display::Mode::gif) display::applySource(draft.preset, draft.path, draft.stopped);
+    if (draft.hasStack) display::setStack(draft.stack);
+    if (includes(0)) display::applySource(draft.preset, draft.path, draft.stopped);
     if (draft.hasChart) display::setChart(draft.chart);
+    if (draft.hasQuotes) display::setQuotes(draft.quotes);
     for (int i = 0; i < 6; ++i) {
         if (draft.speeds[i] >= 0) display::speed(i, draft.speeds[i]);
         if (draft.hasText[i]) display::text(i, stagedText[i], draft.repeats[i]);
@@ -150,6 +196,11 @@ static bool dispatch() {
     payload[length] = 0;
     if (method == 41) return draft.ready && field(payload[0], payload+1, length-1, true);
     if (method == 42) return take();
+    if (method == 45) {
+        if (payload[0] > 100 || payload[1] > 100) return false;
+        display::setFx(payload[0], payload[1]);
+        return true;
+    }
     if (method == 37 || method == 40) {
         if (payload[0] > static_cast<uint8_t>(display::Mode::beef)) return false;
         auto mode = static_cast<display::Mode>(payload[0]);

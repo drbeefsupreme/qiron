@@ -424,3 +424,27 @@ a {
 [hidden] { display: none !important; }
 
 #take-live kbd { font: 500 .72em monospace; margin-left: .65em; white-space: nowrap; }
+
+body[data-view="stage"] .stage-monitor {
+  width: min(100%, max(320px, 78vh));
+  margin-inline: auto;
+}
+body[data-view="stage"] #stage-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  background: #000;
+}
+body[data-view="stage"] .stage-monitor figcaption {
+  align-items: baseline;
+  line-height: 1.5;
+  gap: 1rem;
+}
+body[data-view="stage"] .stage-monitor figcaption > span:last-child {
+  white-space: nowrap;
+}
+body[data-view="stage"] #stage-scrolls dd {
+  margin: 0 0 .75em;
+  overflow-wrap: anywhere;
+}

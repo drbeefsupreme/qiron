@@ -226,16 +226,14 @@ def rehearse(browser, url, password, panel):
     operator.locator("#mode-intro").click()
     panel.expect(40, bytes([2]), start)
     take("intro")
-    expect(stage.locator("#intro-screen")).to_be_visible()
-    assert stage.locator("#intro-screen").evaluate("img => img.decode().then(() => img.naturalWidth)") == 128
+    expect(stage.locator("#stage-canvas")).to_be_visible()
+    assert stage.locator("#stage-canvas").evaluate("canvas => [canvas.width, canvas.height]") == [128, 96]
     for mode, mode_id in [("crow", 3), ("beef", 4)]:
         start = len(panel.frames)
         operator.locator("#take-" + mode).click()
         panel.expect(40, bytes([mode_id]), start)
         panel.expect(42, b"", start)
-        portrait = stage.locator("#stage-" + mode + " img")
-        expect(portrait).to_be_visible()
-        assert portrait.evaluate("img => img.decode().then(() => img.naturalWidth)") == 96
+        expect(stage.locator("#stage-" + mode)).to_be_visible()
         assert request.get(url + "/api/stage").json()["mode"] == mode
     public = audience[0].request
     assert public.get(url + "/api/panel").status == 401
@@ -263,6 +261,43 @@ def rehearse(browser, url, password, panel):
     panel.expect(42, b"", reconnected)
     expect(operator.locator("#panel-status")).to_contain_text("connected", ignore_case=True)
     assert (41, bytes([16])) not in panel.frames[reconnected:]
+
+    operator.locator("#mode-gif").click()
+    operator.locator("#gif-source").select_option("beef")
+    operator.locator("#layer1").fill("OFFSHORE EXCHANGE")
+    for widget in ["ticker", "peter", "santa"]:
+        operator.locator("#widget-choice").select_option(widget)
+        operator.locator("#add-widget").click()
+    operator.get_by_role("button", name="Send backward · Peter Thiel", exact=True).click()
+    operator.get_by_role("button", name="Remove · Santa Claus", exact=True).click()
+    operator.locator("#melt").fill("72")
+    operator.locator("#hue").fill("61")
+    expect(operator.locator("#take-live")).to_be_enabled()
+    prepared = panel_state()
+    assert prepared["widgets"][0] == "beef" and prepared["widgets"][-2:] == ["peter", "ticker"]
+    assert (prepared["melt"], prepared["hue"]) == (72, 61)
+    start = len(panel.frames)
+    operator.locator("#melt-live").click()
+    panel.expect(45, bytes([72, 61]), start)
+    assert request.get(url + "/api/stage").json()["mode"] == "intro"
+    assert panel_state()["revision"] == prepared["revision"]
+    operator.locator("#clear-live-fx").click()
+    panel.expect(45, bytes([0, 0]), start)
+    assert (42, b"") not in panel.frames[start:]
+    operator.locator("#take-live").click()
+    panel.expect(42, b"", start)
+    expect(stage.locator("#stage-peter")).to_be_visible()
+    expect(stage.locator("#stage-beef")).to_be_visible()
+    scene = request.get(url + "/api/stage").json()
+    assert scene["widgets"] == prepared["widgets"]
+    assert [q["symbol"] for q in scene["tickers"]] == ["PISSCOIN", "PRICECOIN", "BONER", "FARTCOIN", "ROGUE", "CROW"]
+    assert scene["melt"] == 72 and scene["hue"] == 61
+    expect(stage.locator("#l1")).to_have_text("OFFSHORE EXCHANGE")
+    operator.locator("#mode-blood").click()
+    expect(operator.locator("#widget-stack li")).to_have_count(2)
+    operator.locator("#mode-gif").click()
+    expect(operator.locator("#gif-source")).to_have_value("beef")
+    expect(operator.locator("#melt")).to_have_value("72")
 
 
 

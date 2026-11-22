@@ -22,7 +22,7 @@ The password prompt above uses zsh. In Bash use `read -rs -p 'Booth password: ' 
 
 The booth also has two one-click portrait takes, **Dr. Crow** and **Dr. Beef Supreme**. Each plays a ten-second idle loop. To return to a show cue, select its mode and take it live.
 
-The 24-second Introduction places Crow, Beef, Peter Thiel and Santa against the poster’s ochre jungle and falling petals. The CAW-IN and Santa Tracker sequences return to an ensemble Christmas Telethon title. The Teensy plays the intro and the two booth portraits directly from flash. The browser stage uses the same GIFs. To regenerate the intro from its source art, run `python3 art/telethon.py` with Pillow installed before building the firmware.
+The 24-second Introduction places Crow, Beef, Peter Thiel and Santa against the poster’s ochre jungle and falling petals. The CAW-IN and Santa Tracker sequences return to an ensemble Christmas Telethon title. The Teensy plays the intro and all four portraits directly from flash. The browser stage uses the same GIFs. To regenerate the intro from its source art, run `python3 art/telethon.py` with Pillow installed before building the firmware.
 
 ## Game rules
 
@@ -47,6 +47,16 @@ The market process serializes trades and operator commands. It writes the market
 Run the Elixir application on the Pi that has the Teensy plugged into USB. The same application serves the audience, booth and stage. For a show URL, point the HTTPS reverse proxy at that Pi. The server needs Linux, Python 3 and permission to open the USB serial device. Raspberry Pi OS usually grants serial access through the `dialout` group. Restart the login session after changing groups.
 
 The controller opens `/dev/ttyACM0`. To select a stable device name, set `QYRON_DEVICE` to the Teensy symlink under `/dev/serial/by-id/` before starting the app. Run only one controller on the port. Stop the running controller before flashing over USB.
+
+## Mix widgets and melt the screen
+
+Choose a mode in the booth to recall its widget stack. The list runs from back to front. Use **Add to front**, the arrows, and **×** to build the stack. Each widget can appear once. The four portraits have transparent backgrounds. The intro, SD footage and the chart cover anything behind them. In GIF mode, **GIF mode background** swaps the back layer while keeping your text and ticker in front. Select an active scroll under **Scrolling layers** to set its message and speed.
+
+Blood Futures starts with the chart and a rightward ticker. You can add the ticker to any mode. PISSCOIN, PRICECOIN, BONER, FARTCOIN, ROGUE and CROW each have a fixed color and a simulated price. Their quotes move independently of the audience market.
+
+Move **Melt** and **Hue shift** while watching the draft monitor. **Take live** switches the prepared stack and its effects together. **Melt live** sends the two slider settings directly to the on-air stack, leaving a different draft prepared. When both sliders are zero, that button uses 75% melt and 65% hue. **Clear live FX** immediately restores the live picture. The draft monitor and browser stage render from the same scene data. Animation clocks run on each display. SD footage and hardware macros are visible on the physical panel.
+
+The Pi stores layouts, prices and cues. The Teensy decodes local media, composites the layers into 128 × 96 RGB pixels, then applies displacement and color rotation before the frame swap. A six-price update occupies 28 bytes on USB including framing. A live FX update occupies six bytes. Running animations need no per-frame USB traffic.
 
 ## How the booth stages a cue
 
@@ -86,6 +96,11 @@ The Pi and Teensy use one framed binary protocol over USB serial. Flash the new 
 | 40 | Begin a new staged scene | Mode byte |
 | 41 | Preload a field | One-byte field method followed by its normal payload |
 | 42 | Take the prepared scene | Empty |
+| 43 | Update ticker prices | Six little-endian uint32 prices in cents, in the ticker order above |
+| 44 | Set widget stack | Melt and hue bytes (0–100), followed by 0–14 distinct widget IDs in back-to-front order |
+| 45 | Set live effects | Melt and hue bytes (0–100) |
+
+Widget IDs 0–7 are SD, chart, intro, Crow, Beef, Peter, Santa and ticker. IDs 8–13 select scrolls 1–5 and F. Preload the stack as the first field of a custom scene, then send its required data and take. Live quote and FX updates can run while another scene is staged.
 
 `GET /api/stage` exposes the on-air display, current mark, open counts and candles. The authenticated `GET /api/panel` exposes the draft, its revision, the on-air mode and preload status. A booth edit posts to `/api/operator`; a take posts `{"take": revision}` to that endpoint. A stale revision returns HTTP 409.
 

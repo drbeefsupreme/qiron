@@ -39,6 +39,26 @@ inline void blood(Surface& s, const display::Chart& chart) {
     snprintf(label, sizeof(label), "BULL %lu", (unsigned long)chart.bullish);
     s.drawString(3, 78, mint, label);
     snprintf(label, sizeof(label), "BEAR %lu", (unsigned long)chart.bearish);
-    s.drawString(3, 87, scarlet, label);
+    s.drawString(66, 78, scarlet, label);
 }
+inline void ticker(Surface& background, const uint32_t* quotes, uint32_t elapsed) {
+    static const char* const names[] = {"PISSCOIN","PRICECOIN","BONER","FARTCOIN","ROGUE","CROW"};
+    static const rgb24 colors[] = {{255,216,74},{84,207,255},{255,119,183},{169,236,92},{193,142,255},{255,146,89}};
+    char label[6][32];
+    int widths[6], period = 0;
+    for (int i=0; i<6; ++i) {
+        snprintf(label[i], sizeof(label[i]), "%s %lu.%02lu", names[i], (unsigned long)(quotes[i]/100), (unsigned long)(quotes[i]%100));
+        widths[i] = strlen(label[i])*5 + 12;
+        period += widths[i];
+    }
+    background.setFont(font5x7);
+    int x = int((elapsed / 40) % period) - period;
+    while (x < 128) {
+        for (int i=0; i<6; ++i) {
+            if (x < 128 && x + widths[i] > 0) background.drawString(x,88,colors[i],label[i]);
+            x += widths[i];
+        }
+    }
+}
+
 }

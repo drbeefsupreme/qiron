@@ -7,8 +7,8 @@ defmodule Qiron.Panel do
             prepared: nil,
             restore: :needed,
             failed: nil,
-            last_chart: nil,
-            staged_chart: nil
+            live_fields: %{},
+            staged_fields: %{}
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   def command(cmd), do: GenServer.call(__MODULE__, {:command, cmd}, 12_000)
@@ -48,7 +48,7 @@ defmodule Qiron.Panel do
     if Market.call(:panel).revision == rev do
       :ok = Market.call({:mode, mode})
       draft = Market.call(:panel)
-      s = %{s | job: nil, prepared: nil, failed: nil, staged_chart: nil}
+      s = %{s | job: nil, prepared: nil, failed: nil, staged_fields: %{}}
 
       if s.port do
         fields = scene(draft, nil)
@@ -62,6 +62,23 @@ defmodule Qiron.Panel do
       end
     else
       {:reply, :stale, s}
+    end
+  end
+
+  def handle_call({:command, {:live_fx, melt, hue} = cmd}, _, s)
+      when melt in 0..100 and hue in 0..100 do
+    cond do
+      !s.port ->
+        {:reply, Market.call(cmd), s}
+
+      s.restore != :done ->
+        {:reply, :not_ready, s}
+
+      true ->
+        case transmit(s, {45, <<melt, hue>>}) do
+          {:ok, s} -> {:reply, Market.call(cmd), s}
+          {error, s} -> {:reply, error, s}
+        end
     end
   end
 
@@ -92,15 +109,14 @@ defmodule Qiron.Panel do
     s =
       if s.port do
         live = Market.call(:live_panel)
-        s = if s.restore == :done and live.mode == "blood", do: sync_chart(s, live), else: s
+        s = if s.restore == :done, do: sync_market(s, live), else: s
         draft = Market.call(:panel)
         s = plan(s, draft)
 
-        if s.prepared == draft.revision and draft.mode == "blood" do
-          frame = field(chart(draft))
-
-          if frame != s.staged_chart,
-            do: send(self(), {:refresh_staged_chart, draft.revision, frame})
+        if s.prepared == draft.revision do
+          for {id, _} = frame <- market_fields(draft), s.staged_fields[id] != frame do
+            send(self(), {:refresh_market, draft.revision, frame})
+          end
         end
 
         s
@@ -112,22 +128,31 @@ defmodule Qiron.Panel do
     {:noreply, s}
   end
 
-  def handle_info({:refresh_staged_chart, rev, frame}, %{prepared: rev} = s) do
-    case transmit(s, frame) do
-      {:ok, s} -> {:noreply, %{s | staged_chart: frame}}
-      {reason, s} -> {:noreply, failure(s, {:draft, rev}, reason, frame)}
+  def handle_info({:refresh_market, rev, {id, _} = frame}, %{prepared: rev} = s) do
+    case transmit(s, field(frame)) do
+      {:ok, s} -> {:noreply, %{s | staged_fields: Map.put(s.staged_fields, id, frame)}}
+      {reason, s} -> {:noreply, failure(s, {:draft, rev}, reason, field(frame))}
     end
   end
 
   def handle_info({:prepare, key}, %{job: {key, [frame | rest]}} = s) do
     case transmit(s, frame) do
       {:ok, s} ->
+        s =
+          case frame do
+            {41, <<id, payload::binary>>} when id in [38, 43] ->
+              %{s | staged_fields: Map.put(s.staged_fields, id, {id, payload})}
+
+            _ ->
+              s
+          end
+
         case {key, rest} do
           {{:restore, _}, []} ->
             {:noreply, plan(%{s | restore: :done, failed: nil, job: nil}, Market.call(:panel))}
 
           {{:draft, rev}, []} ->
-            {:noreply, %{s | prepared: rev, staged_chart: frame, failed: nil, job: nil}}
+            {:noreply, %{s | prepared: rev, failed: nil, job: nil}}
 
           _ ->
             {:noreply, start_job(s, key, rest)}
@@ -161,7 +186,7 @@ defmodule Qiron.Panel do
         case transmit(s, {42, ""}) do
           {:ok, s} ->
             :ok = Market.call({:take, rev})
-            {:reply, :ok, %{s | restore: :done, prepared: nil, last_chart: nil, failed: nil}}
+            {:reply, :ok, %{s | restore: :done, prepared: nil, live_fields: %{}, failed: nil}}
 
           {reason, s} ->
             {:reply, reason, failure(s, {:draft, rev}, reason)}
@@ -222,31 +247,44 @@ defmodule Qiron.Panel do
   end
 
   defp scene(data, action) do
-    fields =
-      case data.mode do
-        "gif" ->
-          lines =
-            Enum.flat_map(data.layers, fn l ->
-              [{5 + l.id, <<l.speed>>}, {l.id - 1, <<-1::little-signed-32, l.text::binary>>}]
-            end)
+    stack = for widget <- data.widgets, into: <<>>, do: <<Display.widget_id(widget)>>
+    fields = [{44, <<data.melt, data.hue, stack::binary>>}, {12, <<data.brightness>>}]
 
-          gif = data.gif
-          exact = if gif.playing and gif.file != "", do: [{39, gif.file}], else: []
-          stop = if gif.playing, do: [], else: [{22, ""}]
-          cue = if action, do: [{Display.method(action), ""}], else: []
-          lines ++ stop ++ [{Display.method(gif.preset), ""}] ++ exact ++ cue
+    lines =
+      for l <- data.layers,
+          Display.line_widget(l.id) in data.widgets,
+          frame <- [{5 + l.id, <<l.speed>>}, {l.id - 1, <<-1::little-signed-32, l.text::binary>>}],
+          do: frame
 
-        "blood" ->
-          [chart(data)]
-
-        mode when mode in ["intro", "crow", "beef"] ->
-          []
+    gif_fields =
+      if "sd" in data.widgets do
+        gif = data.gif
+        exact = if gif.playing and gif.file != "", do: [{39, gif.file}], else: []
+        stop = if gif.playing, do: [], else: [{22, ""}]
+        cue = if action, do: [{Display.method(action), ""}], else: []
+        stop ++ [{Display.method(gif.preset), ""}] ++ exact ++ cue
+      else
+        []
       end
 
     [
       {40, <<Map.fetch!(@modes, data.mode)>>}
-      | Enum.map([{12, <<data.brightness>>} | fields], &field/1)
+      | Enum.map(fields ++ lines ++ gif_fields ++ market_fields(data), &field/1)
     ]
+  end
+
+  defp market_fields(data) do
+    Enum.flat_map(data.widgets, fn
+      "chart" ->
+        [chart(data)]
+
+      "ticker" ->
+        prices = for t <- data.tickers, into: <<>>, do: <<t.price_cents::little-32>>
+        [{43, prices}]
+
+      _ ->
+        []
+    end)
   end
 
   defp chart(data) do
@@ -260,17 +298,17 @@ defmodule Qiron.Panel do
 
   defp field({method, payload}), do: {41, <<method, payload::binary>>}
 
-  defp sync_chart(s, data) do
-    frame = chart(data)
-
-    if frame == s.last_chart do
-      s
-    else
-      case transmit(s, frame) do
-        {:ok, s} -> %{s | last_chart: frame}
-        {_, s} -> disconnect(s)
+  defp sync_market(s, data) do
+    Enum.reduce_while(market_fields(data), s, fn {id, _} = frame, s ->
+      if s.live_fields[id] == frame do
+        {:cont, s}
+      else
+        case transmit(s, frame) do
+          {:ok, s} -> {:cont, %{s | live_fields: Map.put(s.live_fields, id, frame)}}
+          {_, s} -> {:halt, disconnect(s)}
+        end
       end
-    end
+    end)
   end
 
   defp connect(s) do

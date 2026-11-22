@@ -93,7 +93,10 @@ async function refresh() {
     const data = await api(view === "audience" ? "me" : "stage");
     const hardware = view === "operator" ? await api("panel") : null;
     if (seq !== version) return;
-    if (hardware && !writeTask) renderBooth(hardware);
+    if (hardware) {
+      previewMarket = data;
+      if (!writeTask) renderBooth(hardware);
+    }
     (view === "audience" ? account : stage)(data);
     signal(true);
   } catch {

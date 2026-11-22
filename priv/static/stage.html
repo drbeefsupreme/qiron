@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Stage · Too Late TV</title>
     <link rel="stylesheet" href="/style.css" />
+    <script defer src="/compositor.js"></script>
     <script defer src="/stage.js"></script>
     <script defer src="/app.js"></script>
   </head>
@@ -16,31 +17,18 @@
     <main>
       <div class="eyebrow">QYRON / STAGE FEED</div>
       <h1><span id="stage-title">Stage display</span><span>.</span></h1>
-      <section id="stage-gif" hidden>
-      <section class="board">
-        <aside id="l4"></aside>
-        <div>
-          <div id="l2"></div>
-          <h2 id="l1">Waiting for feed</h2>
-          <div id="l3"></div>
-        </div>
-        <aside id="l5"></aside>
-      </section>
-      <p class="stageinfo" id="stage-file"></p>
-      </section>
+      <figure class="stage-monitor">
+        <canvas id="stage-canvas" width="128" height="96" role="img" aria-label="Stage display" aria-describedby="stage-layers"></canvas>
+        <figcaption><span id="stage-layers">Waiting for feed</span><span>128 × 96</span></figcaption>
+      </figure>
+      <section id="stage-gif" hidden><p id="stage-file" class="stageinfo"></p></section>
       <section id="stage-blood" hidden>
         <div class="stageinfo quote"><div>ORACLE MARK <b id="mark">…</b></div><div>BULLISH <b id="bulls">0</b></div><div>BEARISH <b id="bears">0</b></div></div>
-        <figure class="chart"><canvas id="candles" width="288" height="108" role="img" aria-label="Price candlesticks"></canvas><figcaption>10-SECOND CANDLES <span>OPEN / HIGH / LOW / CLOSE</span></figcaption></figure>
       </section>
-      <section id="stage-intro" hidden>
-        <img id="intro-screen" class="stage-animation" data-file="/telethon.gif" width="128" height="96" alt="Crow, Beef, Peter Thiel and Santa in a golden jungle, with CAW-IN and Santa Tracker title cards">
-      </section>
-      <section id="stage-crow" class="stage-portrait" hidden>
-        <img class="stage-animation" data-file="/dr-crow.gif" width="96" height="96" alt="Dr. Crow portrait">
-      </section>
-      <section id="stage-beef" class="stage-portrait" hidden>
-        <img class="stage-animation" data-file="/dr-beef.gif" width="96" height="96" alt="Dr. Beef Supreme portrait">
-      </section>
+      <details id="stage-scrolls" hidden>
+        <summary>On-air text</summary>
+        <dl></dl>
+      </details>
       <p id="error" role="alert"></p>
     </main>
     <footer>TOO LATE SHOW <span>◆</span> CROWNET TERMINAL</footer>

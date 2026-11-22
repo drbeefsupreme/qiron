@@ -6,6 +6,14 @@ defmodule Qiron.Market do
   @max_mark 1_000_000
   @slug 5_000_000
   @cooldown_ms 300_000
+  @tickers [
+    {"PISSCOIN", "#FFD84A", 1250},
+    {"PRICECOIN", "#54CFFF", 2400},
+    {"BONER", "#FF77B7", 6900},
+    {"FARTCOIN", "#A9EC5C", 420},
+    {"ROGUE", "#C18EFF", 8700},
+    {"CROW", "#FF9259", 3300}
+  ]
 
   defstruct mark: 10000,
             previous: 10000,
@@ -16,7 +24,9 @@ defmodule Qiron.Market do
             draft: nil,
             revision: 0,
             pending_action: nil,
-            candles: []
+            candles: [],
+            ticker_seed: nil,
+            ticker_prices: Enum.map(@tickers, &elem(&1, 2))
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name]))
   def call(command, server \\ __MODULE__), do: GenServer.call(server, command)
@@ -34,13 +44,13 @@ defmodule Qiron.Market do
 
     display =
       Map.get_lazy(show, :display, fn ->
-        struct(Display, Map.take(show, [:lines, :speeds, :brightness]))
+        Map.take(show, [:lines, :speeds, :brightness])
       end)
 
     next =
       struct(__MODULE__, Map.delete(show, :__struct__))
-      |> Map.put(:display, display)
-      |> Map.put(:draft, Map.get(show, :draft) || display)
+      |> Map.put(:display, Display.restore(display))
+      |> Map.put(:draft, Display.restore(Map.get(show, :draft) || display))
 
     {:ok, persist(next |> migrate_accounts() |> record_mark(), show, path)}
   end
@@ -54,6 +64,9 @@ defmodule Qiron.Market do
         move(s, div(s.mark * (10_000 + step) + 5_000, 10_000))
       end
 
+    seed = if s.ticker_seed, do: :rand.seed_s(s.ticker_seed), else: :rand.seed_s(:exsss)
+    {prices, seed} = Enum.map_reduce(s.ticker_prices, seed, &tick_price/2)
+    next = %{next | ticker_prices: prices, ticker_seed: :rand.export_seed_s(seed)}
     Process.send_after(self(), :tick, 2000)
     {:noreply, persist(next, s, path)}
   end
@@ -61,6 +74,13 @@ defmodule Qiron.Market do
   def handle_call(command, _, {s, path}) do
     {next, reply} = apply_command(command, s)
     {:reply, reply, persist(next, s, path)}
+  end
+
+  defp tick_price(price, seed) do
+    {step, seed} = :rand.uniform_s(max(1, div(price, 50)), seed)
+    {direction, seed} = :rand.uniform_s(2, seed)
+    next = if direction == 1, do: max(1, price - step), else: min(@max_mark, price + step)
+    {next, seed}
   end
 
   defp persist(s, s, path), do: {s, path}
@@ -130,11 +150,24 @@ defmodule Qiron.Market do
        revision: s.revision,
        dirty: s.draft != s.display or s.pending_action != nil,
        live_mode: s.display.mode,
+       live_melt: s.display.melt,
+       live_hue: s.display.hue,
        action: s.pending_action
      })}
   end
 
   defp apply_command(:live_panel, s), do: {s, scene(s.display, s)}
+
+  defp apply_command({:live_fx, melt, hue}, s) when melt in 0..100 and hue in 0..100 do
+    display = %{s.display | melt: melt, hue: hue}
+
+    draft =
+      if s.draft == s.display and is_nil(s.pending_action),
+        do: display,
+        else: Display.remember_live_fx(s.draft, s.display, melt, hue)
+
+    {%{s | display: display, draft: draft}, :ok}
+  end
 
   defp apply_command({:take, rev}, %{revision: rev} = s) do
     {%{s | display: s.draft, pending_action: nil, revision: rev + 1}, :ok}
@@ -152,7 +185,7 @@ defmodule Qiron.Market do
   defp apply_command(command, s) do
     case Display.change(s.draft, command) do
       {:ok, draft} ->
-        action = if draft.mode == s.draft.mode, do: s.pending_action
+        action = if draft.mode == s.draft.mode and "sd" in draft.widgets, do: s.pending_action
         edit(s, draft, action)
 
       error ->
@@ -290,8 +323,7 @@ defmodule Qiron.Market do
   end
 
   defp stage(s) do
-    live = scene(s.display, s)
-    %{live | layers: Enum.take(live.layers, 5)}
+    scene(s.display, s)
   end
 
   defp scene(display, s) do
@@ -301,10 +333,17 @@ defmodule Qiron.Market do
 
     %{
       mode: display.mode,
+      widgets: display.widgets,
+      melt: display.melt,
+      hue: display.hue,
       gif: display.gif,
       brightness: display.brightness,
       mark_cents: s.mark,
       candles: Enum.reverse(s.candles),
+      tickers:
+        Enum.zip_with(@tickers, s.ticker_prices, fn {symbol, color, _}, price ->
+          %{symbol: symbol, color: color, price_cents: price}
+        end),
       mark: s.mark / 100,
       change: (s.mark - s.previous) / 100,
       up: up,

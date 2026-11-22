@@ -16,7 +16,9 @@ function draftStatus() {
     button.disabled = switching || !!writeTask || edits.size > 0;
   }
   el("brightness").disabled = !!portraitTake;
-  el("gif-controls").inert = !!portraitTake;
+  el("gif-controls").inert = switching;
+  el("mixer").inert = switching;
+  for (const id of ["melt-live", "clear-live-fx"]) el(id).disabled = switching || liveFxBusy;
   for (const button of document.querySelectorAll("[data-mode]")) {
     button.disabled = switching;
     button.setAttribute("aria-pressed", String(draft.mode === button.dataset.mode));
@@ -98,6 +100,7 @@ function layerFields(layer) {
     field.oninput = () => {
       const value = key === "text" ? field.value : field.valueAsNumber;
       edit(field.id, {layer: layer.id, [key]: value});
+      renderPreview();
     };
     label.append(field);
     group.append(label);
@@ -122,35 +125,34 @@ function renderBooth(data) {
   el("on-air").textContent = "On air · " + modeNames[data.live_mode];
   el("panel-status").textContent = "USB " + data.status;
   el("panel-error").textContent = data.error || "";
-  el("gif-controls").hidden = data.mode !== "gif";
   el("blood-info").hidden = data.mode !== "blood";
   el("intro-info").hidden = data.mode !== "intro";
   fieldValue("brightness", "brightness", data.brightness);
-  if (data.mode === "gif") {
-    el("gif-playback").textContent = !data.gif.playing ? "DRAFT · STOPPED" : data.gif.file ? "DRAFT · LOOP FILE" : "DRAFT · CYCLE FOLDER";
-    fieldValue("gif-preset", "gif", data.gif.preset);
-    fieldValue("gif-file", "gif", data.gif.file);
-    el("gif-file").placeholder = "/gifs/" + gifDirectories[el("gif-preset").value] + "/filename.gif";
-    if (!el("action").options.length) {
-      el("action").add(new Option("None", ""));
-      const names = {caw: "CAW", dopamine: "DOPAMINE"};
-      for (const action of data.actions.filter(name => !(name in gifDirectories))) {
-        const label = action.replace(/([A-Z])/g, " $1");
-        el("action").add(new Option(names[action] || label[0].toUpperCase() + label.slice(1), action));
-      }
-    }
-    fieldValue("action", "action", data.action || "");
-    for (const l of data.layers) {
-      if (!el("layer" + l.id)) layerFields(l);
-      fieldValue("layer" + l.id, "layer" + l.id, l.override);
-      fieldValue("speed" + l.id, "speed" + l.id, l.speed);
-      el("layer" + l.id).placeholder = l.text;
+  el("gif-playback").textContent = !data.gif.playing ? "DRAFT · STOPPED" : data.gif.file ? "DRAFT · LOOP FILE" : "DRAFT · CYCLE FOLDER";
+  fieldValue("gif-preset", "gif", data.gif.preset);
+  fieldValue("gif-file", "gif", data.gif.file);
+  el("gif-file").placeholder = "/gifs/" + gifDirectories[el("gif-preset").value] + "/filename.gif";
+  if (!el("action").options.length) {
+    el("action").add(new Option("None", ""));
+    const names = {caw: "CAW", dopamine: "DOPAMINE"};
+    for (const action of data.actions.filter(name => !(name in gifDirectories))) {
+      const label = action.replace(/([A-Z])/g, " $1");
+      el("action").add(new Option(names[action] || label[0].toUpperCase() + label.slice(1), action));
     }
   }
+  fieldValue("action", "action", data.action || "");
+  for (const l of data.layers) {
+    if (!el("layer" + l.id)) layerFields(l);
+    fieldValue("layer" + l.id, "layer" + l.id, l.override);
+    fieldValue("speed" + l.id, "speed" + l.id, l.speed);
+    el("layer" + l.id).placeholder = l.text;
+  }
+  renderMixer();
   draftStatus();
 }
 
 function initBooth() {
+  initMixer();
   const volatility = el("volatility");
   volatility.oninput = () => {
     showVolatility(volatility.valueAsNumber);

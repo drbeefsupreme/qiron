@@ -1,20 +1,22 @@
 #include "display.h"
 
 #include <Arduino.h>
+#include <algorithm>
 #include <MatrixHardware_Teensy4_ShieldV5.h>
 #include <SmartMatrix.h>
 #include <AnimatedGIF.h>
 #include <SD.h>
 #include <strings.h>
-#include "scenes.h"
-#include "films.h"
-#include "film_assets.h"
+#include "render.h"
 
 namespace {
 
 constexpr uint16_t Width = 128, Height = 96;
 SMARTMATRIX_ALLOCATE_BUFFERS(matrix, Width, Height, 36, 4, SM_PANELTYPE_HUB75_32ROW_MOD16SCAN, SM_HUB75_OPTIONS_C_SHAPE_STACKING);
 SMARTMATRIX_ALLOCATE_BACKGROUND_LAYER(background, Width, Height, 24, SM_BACKGROUND_OPTIONS_NONE);
+DMAMEM rgb24 sdPixels[2 * Width * Height];
+color_chan_t sdLut[256];
+decltype(background) sdSurface(sdPixels, Width, Height, sdLut);
 SMARTMATRIX_ALLOCATE_SCROLLING_LAYER(line1, Width, Height, 24, SM_SCROLLING_OPTIONS_NONE);
 SMARTMATRIX_ALLOCATE_SCROLLING_LAYER(line2, Width, Height, 24, SM_SCROLLING_OPTIONS_NONE);
 SMARTMATRIX_ALLOCATE_SCROLLING_LAYER(line3, Width, Height, 24, SM_SCROLLING_OPTIONS_NONE);
@@ -57,33 +59,40 @@ struct Gif {
     AnimatedGIF decoder;
     File file;
 };
-DMAMEM films::Player<decltype(background)> film;
+DMAMEM films::Player filmPlayer;
+DMAMEM films::Cache filmCaches[5];
+display::Stack stack{7, {0,8,9,10,11,12,13}, 0, 0};
+uint16_t mask = 0x3f01;
+uint32_t started[14], lastComposition, lastScroll;
+uint32_t quotes[6];
+bool dirty = true;
 Gif first;
 DMAMEM Gif second;
 Gif *live = &first, *spare = &second;
 File directory, preparedDirectory;
 int preparedPreset = -1;
 File* opening;
-DMAMEM rgb24 firstFrame[Width * Height];
+rgb24* const firstFrame = sdPixels + Width * Height;
 int firstDelay;
-bool taking, pendingSwap;
+bool taking;
 char exactFile[241], preparedFile[241];
-display::Mode mode = display::Mode::gif;
+
 display::Chart chart{};
-bool chartDirty;
-uint32_t modeStarted;
+
+
 uint8_t preset = 4;
 bool sdReady, playing = true, cycling = true, decoding;
 uint32_t lastSelection, lastFrame, frameDelay;
 
-void publishFrame() {
-    if (taking) pendingSwap = true;
-    else background.swapBuffers();
+bool includes(uint8_t id) {
+    for (unsigned i = 0; i < stack.count; ++i)
+        if (stack.ids[i] == id) return true;
+    return false;
 }
 
 void fill(rgb24 color) {
-    background.fillScreen(color);
-    publishFrame();
+    sdSurface.fillScreen(color);
+    dirty = true;
 }
 
 void closeGif() {
@@ -130,7 +139,7 @@ void drawGifLine(GIFDRAW* line) {
         const uint8_t* color = line->pPalette24 + index * 3;
         rgb24 pixel(color[0], color[1], color[2]);
         if (line->pUser) firstFrame[y * Width + x] = pixel;
-        else background.drawPixel(x, y, pixel);
+        else sdSurface.drawPixel(x, y, pixel);
     }
 }
 
@@ -160,7 +169,7 @@ bool openNextGif() {
         while ((live->file = directory.openNextFile())) {
             if (gifFile(live->file) && openDecoder(*live)) {
                 decoding = true;
-                background.fillScreen(black);
+                sdSurface.fillScreen(black);
                 return true;
             }
             live->file.close();
@@ -190,7 +199,7 @@ void animateGif(uint32_t now) {
         frameDelay = 100;
         return;
     }
-    background.swapBuffers();
+    dirty = true;
     frameDelay = delayMs > 0 ? delayMs : 10;
     if (status == 0) live->decoder.reset();
 }
@@ -211,31 +220,31 @@ void drawShape() {
     int r = random(Width);
     rgb24 edge = randomColor(), inside = randomColor();
     switch (random(15)) {
-        case 0: background.drawPixel(x,y,edge); break;
-        case 1: background.drawLine(x,y,x1,y1,edge); break;
-        case 2: background.drawCircle(x,y,r,edge); break;
-        case 3: background.drawTriangle(x,y,x1,y1,x2,y2,edge); break;
-        case 4: background.drawRectangle(x,y,x1,y1,edge); break;
-        case 5: background.drawRoundRectangle(x,y,x1,y1,r,edge); break;
-        case 6: background.fillCircle(x,y,r,inside); break;
-        case 7: background.fillTriangle(x,y,x1,y1,x2,y2,inside); break;
-        case 8: background.fillRectangle(x,y,x1,y1,inside); break;
-        case 9: background.fillRoundRectangle(x,y,x1,y1,r,inside); break;
-        case 10: background.fillCircle(x,y,r,edge,inside); break;
-        case 11: background.fillTriangle(x,y,x1,y1,x2,y2,edge,inside); break;
-        case 12: background.fillRectangle(x,y,x1,y1,edge,inside); break;
-        case 13: background.fillRoundRectangle(x,y,x1,y1,r,edge,inside); break;
-        case 14: background.drawEllipse(x,y,r,random(Width),edge); break;
+        case 0: sdSurface.drawPixel(x,y,edge); break;
+        case 1: sdSurface.drawLine(x,y,x1,y1,edge); break;
+        case 2: sdSurface.drawCircle(x,y,r,edge); break;
+        case 3: sdSurface.drawTriangle(x,y,x1,y1,x2,y2,edge); break;
+        case 4: sdSurface.drawRectangle(x,y,x1,y1,edge); break;
+        case 5: sdSurface.drawRoundRectangle(x,y,x1,y1,r,edge); break;
+        case 6: sdSurface.fillCircle(x,y,r,inside); break;
+        case 7: sdSurface.fillTriangle(x,y,x1,y1,x2,y2,inside); break;
+        case 8: sdSurface.fillRectangle(x,y,x1,y1,inside); break;
+        case 9: sdSurface.fillRoundRectangle(x,y,x1,y1,r,inside); break;
+        case 10: sdSurface.fillCircle(x,y,r,edge,inside); break;
+        case 11: sdSurface.fillTriangle(x,y,x1,y1,x2,y2,edge,inside); break;
+        case 12: sdSurface.fillRectangle(x,y,x1,y1,edge,inside); break;
+        case 13: sdSurface.fillRoundRectangle(x,y,x1,y1,r,edge,inside); break;
+        case 14: sdSurface.drawEllipse(x,y,r,random(Width),edge); break;
     }
-    background.swapBuffers();
+    dirty = true;
 }
 
 void drawPixels(uint32_t elapsed) {
     uint32_t offset = elapsed % 15000;
     uint8_t level = (offset % 7500) * 255 / 7500;
     rgb24 color = offset < 7500 ? rgb24(255-level, level, 0) : rgb24(0, 255-level/2, level);
-    for (int i = 0; i < 20; ++i) background.drawPixel(random(Width), random(Height), color);
-    background.swapBuffers();
+    for (int i = 0; i < 20; ++i) sdSurface.drawPixel(random(Width), random(Height), color);
+    dirty = true;
 }
 
 }
@@ -244,8 +253,18 @@ namespace display {
 
 void begin() {
     matrix.addLayer(&background);
-    for (auto line : lines) matrix.addLayer(line);
-    matrix.addLayer(&demo);
+    sdSurface.begin();
+    sdSurface.setRotation(rotation0);
+    for (auto line : lines) {
+        line->begin();
+        line->setRotation(rotation0);
+        line->setRefreshRate(120);
+        line->enableColorCorrection(false);
+    }
+    demo.begin();
+    demo.setRotation(rotation0);
+    demo.setRefreshRate(120);
+    demo.enableColorCorrection(false);
     matrix.begin();
     demo.setMode(wrapForward);
     demo.setFont(font6x10);
@@ -271,44 +290,68 @@ void begin() {
 }
 
 void text(uint8_t layer, const char* value, int32_t repeats) {
-    __disable_irq();
     if (hasText[layer] && *value && repeats == -1 && lines[layer]->getStatus() == -1) {
         lines[layer]->update(value);
     } else {
         lines[layer]->start(value, repeats);
         if (!*value) memset(lines[layer]->scrollingBitmap, 0, Width * Height / 8);
     }
-    __enable_irq();
     hasText[layer] = *value != 0;
+    dirty = true;
 }
 
 void speed(uint8_t layer, uint8_t value) {
-    __disable_irq();
     lines[layer]->setSpeed(value);
-    __enable_irq();
 }
 void brightness(uint8_t value) { matrix.setBrightness(value); }
 
+static void activate() {
+    uint16_t next = 0;
+    auto now = millis();
+    for (unsigned i=0; i<stack.count; ++i) {
+        auto id = stack.ids[i];
+        next |= 1u << id;
+        if (!(mask & (1u << id))) started[id] = now;
+    }
+    if ((mask & 1) && !(next & 1)) {
+        closeGif();
+        demoVisible = false;
+        feature.setVisible(true);
+        demo.setVisible(false);
+        shapesLeft = pixelBurstsLeft = 0;
+        pixelsTimed = blinking = false;
+    }
+    mask = next;
+    dirty = true;
+}
+
+void setStack(const Stack& selected) {
+    stack = selected;
+    if (!taking) activate();
+}
+
 void setMode(Mode next) {
-    if (mode == next) return;
-    mode = next;
-    modeStarted = millis();
-    closeGif();
-    demoVisible = false;
-    demo.setVisible(false);
-    shapesLeft = pixelBurstsLeft = 0;
-    pixelsTimed = blinking = false;
-    for (auto line : lines) line->setVisible(next == Mode::gif);
-    chartDirty = true;
-    if (next == Mode::gif) fill(black);
-    if (next == Mode::intro) film.start(introFilm);
-    if (next == Mode::crow) film.start(crowFilm);
-    if (next == Mode::beef) film.start(beefFilm);
+    Stack preset{};
+    if (next == Mode::gif) preset = {7, {0,8,9,10,11,12,13}, 0, 0};
+    else if (next == Mode::blood) preset = {2, {1,7}, 0, 0};
+    else preset = {1, {static_cast<uint8_t>(next)}, 0, 0};
+    setStack(preset);
+}
+
+void setFx(uint8_t melt, uint8_t hue) {
+    stack.melt = melt;
+    stack.hue = hue;
+    dirty = true;
+}
+
+void setQuotes(const uint32_t* prices) {
+    memcpy(quotes, prices, sizeof(quotes));
+    dirty = true;
 }
 
 void setChart(const Chart& value) {
     chart = value;
-    chartDirty = true;
+    dirty = true;
 }
 
 void cancelFile() {
@@ -324,7 +367,7 @@ bool decodeFirstFrame() {
         spare->file.close();
         return false;
     }
-    for (auto& pixel : firstFrame) pixel = black;
+    std::fill_n(firstFrame, Width * Height, black);
     firstDelay = 0;
     int status = spare->decoder.playFrame(false, &firstDelay, firstFrame);
     if (status < 0 || (status == 0 && spare->decoder.getLastError() != GIF_SUCCESS)) {
@@ -349,7 +392,7 @@ bool prepareFile(const char* path) {
 
 void preparePreset(uint8_t choice) {
     cancelFile();
-    if (mode == Mode::gif && preset == choice && !*exactFile && playing && decoding) return;
+    if (includes(0) && preset == choice && !*exactFile && playing && decoding) return;
     if (!sdReady) sdReady = SD.begin(BUILTIN_SDCARD);
     if (!sdReady) return;
     preparedDirectory = SD.open(directories[choice]);
@@ -379,10 +422,10 @@ void usePrepared() {
     }
     preparedPreset = -1;
     playing = decoding = true;
-    if (mode == Mode::gif) {
-        auto* pixels = background.backBuffer();
-        for (const auto& pixel : firstFrame) *pixels++ = pixel;
-        publishFrame();
+    if (includes(0)) {
+        auto* pixels = sdSurface.backBuffer();
+        std::copy_n(firstFrame, Width * Height, pixels);
+        dirty = true;
     }
     lastFrame = millis();
     lastSelection = lastFrame;
@@ -430,16 +473,14 @@ void applySource(int folder, const char* path, bool stopped) {
 }
 
 void effect(uint8_t method) {
-    if (mode != Mode::gif) return;
+    if (!includes(0)) return;
     uint32_t now = millis();
     switch (method) {
         case 13:
             fill(red);
-            __disable_irq();
             feature.setVisible(false);
             demo.start(demoTitle, 1);
             demo.setVisible(true);
-            __enable_irq();
             demoVisible = true;
             break;
         case 14:
@@ -494,42 +535,59 @@ void effect(uint8_t method) {
     }
 }
 
-void beginTake() {
-    taking = true;
-    pendingSwap = false;
+static void compose(uint32_t now) {
+    while (background.isSwapPending()) {}
+    compositor::render(background, stack, started, now, sdSurface.backBuffer(), chart, quotes,
+                       filmPlayer, filmCaches, [](uint8_t id, rgb24* pixels) {
+        if (id == 5 && demoVisible) compositor::drawLine(demo, pixels, 1, 11);
+        else if (!hasText[id]) return;
+        else if (id < 3) {
+            auto& style = styles[id];
+            compositor::drawLine(*lines[id], pixels, style.offset, style.offset + fontLookup(style.font)->Height);
+        }
+        else compositor::drawLine(*lines[id], pixels);
+    });
+    background.swapBuffers(false);
+    lastComposition = now;
+    dirty = false;
 }
 
+void beginTake() { taking = true; }
+
 void endTake() {
-    if (mode == Mode::blood && chartDirty) {
-        scenes::blood(background, chart);
-        chartDirty = false;
-        pendingSwap = true;
-    }
-    if (mode == Mode::intro || mode == Mode::crow || mode == Mode::beef)
-        pendingSwap = film.render(background, millis() - modeStarted);
+    activate();
     taking = false;
-    if (pendingSwap) background.swapBuffers();
+    compose(millis());
+    while (background.isSwapPending()) {}
 }
 
 void tick() {
-    if (mode == Mode::intro || mode == Mode::crow || mode == Mode::beef) {
-        if (film.render(background, millis() - modeStarted)) background.swapBuffers();
-        return;
-    }
-    if (mode == Mode::blood) {
-        if (chartDirty) {
-            scenes::blood(background, chart);
-            background.swapBuffers(false);
-            chartDirty = false;
+    auto now = millis();
+    if (now - lastScroll >= 8) {
+        unsigned steps = min(15u, (now-lastScroll)/8);
+        lastScroll = now - (now-lastScroll)%8;
+        while (steps--) {
+            for (auto line : lines) line->frameRefreshCallback();
+            demo.frameRefreshCallback();
         }
-        return;
     }
+    if (now - lastComposition >= 33) {
+        bool changed = dirty || stack.melt || stack.hue;
+        compositor::layers(stack, [&](uint8_t id) {
+            if (id >= 2 && id <= 6)
+                changed |= filmCaches[id-2].frame != &films::frameAt(filmsByLayer[id-2], now-started[id]);
+            if (id == 7 || (id >= 8 && (hasText[id-8] || (id == 13 && demoVisible)))) changed = true;
+        });
+        if (changed) compose(now);
+        else lastComposition = now;
+    }
+    if (!(mask & 1)) return;
     if (demoVisible && !demo.getStatus()) {
         demo.setVisible(false);
         feature.setVisible(true);
         demoVisible = false;
+        dirty = true;
     }
-    uint32_t now = millis();
     uint32_t elapsed = now - pixelsStarted;
     if (pixelsTimed && elapsed >= 15000) pixelsTimed = false;
     if (!pixelsTimed && !(shapesForeground && shapesLeft)) animateGif(now);

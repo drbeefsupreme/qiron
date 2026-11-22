@@ -8,7 +8,7 @@ defmodule Qiron.Web do
     at: "/",
     from: {:qiron, "priv/static"},
     only:
-      ~w(style.css exchange.css app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif archivo-black.ttf barlow-condensed.ttf)
+      ~w(style.css compositor.css stage.css mixer.js compositor.js exchange.css app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif peter-thiel.gif santa.gif archivo-black.ttf barlow-condensed.ttf)
   )
 
   plug(:match)
@@ -73,6 +73,21 @@ defmodule Qiron.Web do
 
         %{"gif" => %{"preset" => preset, "file" => file}} ->
           {:gif, preset, file}
+
+        %{"live_fx" => %{"melt" => melt, "hue" => hue}} when melt in 0..100 and hue in 0..100 ->
+          {:live_fx, melt, hue}
+
+        %{"widgets" => widgets} ->
+          {:widgets, widgets}
+
+        %{"melt" => melt, "hue" => hue} ->
+          {:fx, melt, hue}
+
+        %{"melt" => melt} ->
+          {:melt, melt}
+
+        %{"hue" => hue} ->
+          {:hue, hue}
 
         %{"brightness" => value} ->
           {:brightness, value}
@@ -153,7 +168,8 @@ defmodule Qiron.Web do
     end
   end
 
-  defp respond(conn, :wrong_mode), do: send_resp(conn, 409, "This control belongs to GIF mode.")
+  defp respond(conn, :wrong_mode),
+    do: send_resp(conn, 409, "Add the corresponding widget to use this control.")
 
   defp respond(conn, :stale),
     do: send_resp(conn, 409, "Draft changed. Refresh before taking live.")

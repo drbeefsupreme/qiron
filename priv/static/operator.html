@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Operator booth · Too Late TV</title>
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/compositor.css" />
+    <script defer src="/compositor.js"></script>
+    <script defer src="/mixer.js"></script>
     <script defer src="/booth.js"></script>
     <script defer src="/app.js"></script>
   </head>
@@ -26,11 +29,33 @@
         </div>
         <p id="intro-info" hidden>Christmas Telethon · 24-second continuous loop</p>
         <p id="blood-info" hidden>Live oracle mark, 10-second candles and open bullish and bearish positions.</p>
+        <div id="mixer">
+          <section class="mix-monitor">
+            <div class="mix-label"><h3>Draft monitor</h3><span>128 × 96</span></div>
+            <canvas id="draft-canvas" width="128" height="96" aria-label="Animated draft scene"></canvas>
+            <p id="sd-preview" hidden>SD footage plays on the physical panel.</p>
+            <div class="mix-faders">
+              <label>Melt <output id="melt-value" for="melt">0%</output><input id="melt" type="range" min="0" max="100" value="0"></label>
+              <label>Hue shift <output id="hue-value" for="hue">0%</output><input id="hue" type="range" min="0" max="100" value="0"></label>
+            </div>
+          </section>
+          <section class="mix-stack">
+            <div class="mix-label"><h3>Widget stack</h3><span>Back → front</span></div>
+            <ol id="widget-stack"></ol>
+            <div class="mix-add"><select id="widget-choice" aria-label="Widget to add"></select><button type="button" id="add-widget">Add to front</button></div>
+            <label id="gif-source-label" for="gif-source">GIF mode background<select id="gif-source"></select></label>
+          </section>
+        </div>
         <div class="setting"><label>Brightness (0–255)<input id="brightness" type="number" min="0" max="255" required></label></div>
         <div class="take-bar">
           <button type="button" id="take-live" aria-keyshortcuts="Alt+Enter" disabled>Take live <kbd>Alt+Enter</kbd></button>
           <span id="draft-status" role="status">Loading draft…</span>
           <button id="discard-edits" type="button" hidden>Discard unsaved edits</button>
+        </div>
+        <div class="live-fx">
+          <div><h3>On-air effects</h3><span id="live-fx-status"></span></div>
+          <button type="button" id="melt-live" disabled>Melt live</button>
+          <button type="button" id="clear-live-fx" disabled>Clear live FX</button>
         </div>
         <div class="portrait-takes" role="group" aria-label="Live portraits">
           <button type="button" id="take-crow" data-portrait="crow" disabled>Take Dr. Crow live</button>
@@ -42,7 +67,7 @@
       <p id="receipt" role="status"></p>
       <p id="error" role="alert"></p>
       <div id="gif-controls" hidden>
-        <section class="ticket">
+        <section id="sd-controls" class="ticket">
           <div class="tickethead"><h2>GIF playback</h2><small id="gif-playback"></small></div>
           <div id="gif-form" class="settings">
             <label>SD folder<select id="gif-preset"></select></label>
@@ -51,7 +76,7 @@
           <p id="gif-hint">Enter the full path to a file on the Teensy SD card. Leave it empty to cycle the folder.</p>
           <label>Effect or macro for this take<select id="action"></select></label>
         </section>
-        <section class="ticket">
+        <section id="line-controls" class="ticket">
           <h2>Scrolling layers</h2>
           <p>Each layer holds up to 32,767 UTF-8 bytes.</p>
           <div id="layers"></div>

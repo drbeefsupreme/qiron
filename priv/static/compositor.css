@@ -1,0 +1,26 @@
+#mixer{display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);border:1px solid #4a4b42;margin:18px 0;background:#161915;color:#efeee2}
+#mixer section{padding:15px;min-width:0}
+.mix-monitor{border-right:1px solid #505348;background:#242820}
+.mix-label,.live-fx{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mix-label h3,.live-fx h3{margin:0;font-size:17px}
+.mix-label span,.live-fx span{font:10px var(--mono);letter-spacing:.04em}
+#draft-canvas{display:block;background:black;width:100%;height:auto;image-rendering:pixelated;margin:12px 0;border:1px solid #5e6355}
+.mix-faders{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.mix-faders label,#gif-source-label{font:12px var(--mono)}
+.mix-faders output{color:#c9ef90;float:right}
+.mix-faders input{padding:0;accent-color:#b9df88}
+#widget-stack{padding:0;list-style:none;margin:12px 0;counter-reset:layer}
+#widget-stack li{display:flex;align-items:center;padding:3px 0;gap:4px;border-bottom:1px solid #42463d;counter-increment:layer}
+#widget-stack li:before{content:counter(layer,decimal-leading-zero);font:11px var(--mono);color:#aaa99d;margin-right:5px}
+#widget-stack strong{flex:1;font-size:13px}
+#widget-stack button,.mix-add button{color:#efeee2;background:#2e332b;border:1px solid #5c6455;padding:3px 8px}
+#widget-stack button:disabled{opacity:.3}
+.mix-add{display:flex;gap:5px;margin:9px 0 14px}
+.mix-add select,#gif-source{min-width:0;font:13px var(--mono);background:#f1efe4;color:#242720;border:0;padding:6px}
+.mix-add select{flex:1}
+#gif-source-label{display:grid;gap:5px}
+#sd-preview{color:#c8ccbc;font-size:12px}
+.live-fx{justify-content:flex-start;flex-wrap:wrap;border-top:1px solid var(--rule);margin-top:18px;padding-top:12px}
+.live-fx div{margin-right:auto}.live-fx span{display:block;margin-top:4px}
+#melt-live{background:#453057;color:#fff;border-color:#453057}
+@media(max-width:650px){#mixer{grid-template-columns:1fr}.mix-monitor{border-right:0;border-bottom:1px solid #505348}#draft-canvas{max-width:280px;margin-inline:auto}}

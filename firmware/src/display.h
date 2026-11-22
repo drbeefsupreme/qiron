@@ -4,6 +4,10 @@
 
 namespace display {
 enum class Mode : uint8_t { gif, blood, intro, crow, beef };
+struct Stack { uint8_t count, ids[14], melt, hue; };
+void setStack(const Stack& stack);
+void setQuotes(const uint32_t* cents);
+void setFx(uint8_t melt, uint8_t hue);
 struct Candle { uint32_t open, high, low, close; };
 struct Chart {
     uint32_t mark, bullish, bearish;
