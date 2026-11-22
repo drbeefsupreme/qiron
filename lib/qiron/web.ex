@@ -119,17 +119,14 @@ defmodule Qiron.Web do
         conn |> send_resp(403, "Forbidden") |> halt()
 
       Plug.Router.match_path(conn) in ["/operator", "/api/operator", "/api/panel"] ->
-        case System.get_env("OPERATOR_PASSWORD") do
-          pw when is_binary(pw) and byte_size(pw) >= 12 ->
-            Plug.BasicAuth.basic_auth(conn, username: "beef", password: pw)
+        password = System.get_env("OPERATOR_PASSWORD", "")
 
-          _ ->
-            conn
-            |> send_resp(
-              503,
-              "Set OPERATOR_PASSWORD to at least 12 characters to enable the booth."
-            )
-            |> halt()
+        if String.length(password) >= 3 do
+          Plug.BasicAuth.basic_auth(conn, username: "beef", password: password)
+        else
+          conn
+          |> send_resp(503, "Set OPERATOR_PASSWORD to at least 3 characters to enable the booth.")
+          |> halt()
         end
 
       true ->

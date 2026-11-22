@@ -8,7 +8,7 @@ Install Elixir 1.18 or later on Erlang/OTP 27 or later. From this checkout, run 
 
 ```sh
 mix deps.get
-read -rs 'OPERATOR_PASSWORD?Booth password (12 or more characters): '
+read -rs 'OPERATOR_PASSWORD?Booth password (3 or more characters): '
 export OPERATOR_PASSWORD
 mix run --no-halt
 ```
@@ -32,7 +32,7 @@ The mark starts at 100.00 and moves every two seconds within a range of 1.00 to 
 
 ## Run on a show server
 
-Run one application instance behind an HTTPS reverse proxy at the root of a show subdomain. Set `PORT`, `OPERATOR_PASSWORD`, `COOKIE_SECURE=true`, and `SHOW_FILE` to an absolute path on a persistent volume. Serve the app and its API on the same origin. The booth stays locked until you configure a password of at least 12 characters.
+Run one application instance behind an HTTPS reverse proxy at the root of a show subdomain. Set `PORT`, `OPERATOR_PASSWORD`, `COOKIE_SECURE=true`, and `SHOW_FILE` to an absolute path on a persistent volume. Serve the app and its API on the same origin. The booth stays locked until you configure a password of at least 3 characters.
 
 ```sh
 MIX_ENV=prod mix deps.get --only prod

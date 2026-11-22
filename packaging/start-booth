@@ -1,0 +1,15 @@
+#!/bin/bash
+set -eu
+umask 077
+cd -- "$(dirname -- "$0")"
+if [[ -z ${OPERATOR_PASSWORD:-} ]]; then
+  read -r -s -p 'Set a booth password (at least 3 characters): ' OPERATOR_PASSWORD
+  echo
+fi
+if [[ ${#OPERATOR_PASSWORD} -lt 3 ]]; then
+  echo 'Use at least 3 characters.' >&2
+  exit 1
+fi
+export OPERATOR_PASSWORD
+export SHOW_FILE="${SHOW_FILE:-${XDG_DATA_HOME:-$HOME/.local/share}/qiron/show.etf}"
+exec bin/qiron start

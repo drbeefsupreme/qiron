@@ -79,7 +79,7 @@ def show():
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
-        password = secrets.token_hex(16)
+        password = secrets.token_hex(2)[:3]
         env = dict(os.environ, MIX_ENV="dev", QYRON_DEVICE=str(panel.device),
                    PORT=str(port), SHOW_FILE=f"{directory}/show.etf",
                    OPERATOR_PASSWORD=password)
