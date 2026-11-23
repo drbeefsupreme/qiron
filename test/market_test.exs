@@ -62,7 +62,7 @@ defmodule Qiron.MarketTest do
     assert :position_changed = call.({:leverage, "seat", id, 10})
     call.({:mark, 100})
     assert :position_changed = call.({:leverage, "seat", second, 10})
-    assert %{side: "flat", piss_coin: 0.0} = call.({:account, "seat"})
+    assert %{side: "flat", piss_coin: +0.0} = call.({:account, "seat"})
   end
 
   @tag :tmp_dir
