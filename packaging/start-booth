@@ -20,6 +20,15 @@ if [[ -f $join_file ]]; then
   export QYRON_JOIN_SSID="${QYRON_JOIN_SSID-${join_lines[0]}}"
   export QYRON_JOIN_PASSWORD="${QYRON_JOIN_PASSWORD-${join_lines[1]}}"
 fi
+callin_file="${XDG_CONFIG_HOME:-$HOME/.config}/qiron/callin-number"
+if [[ -f $callin_file && -z ${QYRON_CALLIN_NUMBER:-} ]]; then
+  QYRON_CALLIN_NUMBER=$(<"$callin_file")
+  export QYRON_CALLIN_NUMBER
+fi
+phrases_file="${XDG_CONFIG_HOME:-$HOME/.config}/qiron/phrases.json"
+if [[ -f $phrases_file ]]; then
+  export QYRON_PHRASES_FILE="${QYRON_PHRASES_FILE:-$phrases_file}"
+fi
 export OPERATOR_PASSWORD
 export SHOW_FILE="${SHOW_FILE:-${XDG_DATA_HOME:-$HOME/.local/share}/qiron/show.etf}"
 exec bin/qiron start

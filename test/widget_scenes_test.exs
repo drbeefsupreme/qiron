@@ -10,12 +10,12 @@ defmodule Qiron.WidgetScenesTest do
     call = &Market.call(&1, pid)
     assert call.(:stage).widgets == ~w(sd line1 line2 line3 line4 line5 lineF)
     assert :ok = call.({:mode, "blood"})
-    assert call.(:panel).widgets == ["chart", "ticker"]
+    assert call.(:panel).widgets == ["chart", "price", "interest"]
     assert :invalid = call.({:widgets, ["chart", "chart"]})
     assert :invalid = call.({:widgets, ["alien"]})
     assert :invalid = call.({:fx, 101, 0})
 
-    widgets = ~w(peter sd lineF ticker santa)
+    widgets = ~w(peter sd lineF ticker santa callin)
     assert :ok = call.({:widgets, widgets})
     assert :ok = call.({:line, 6, "MERRY"})
     assert :ok = call.({:speed, 6, 78})

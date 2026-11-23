@@ -35,6 +35,12 @@ void display::setChart(const Chart& c) {
     fprintf(stderr, "chart %u %u %u %u %u\n", c.mark, c.bullish, c.bearish, c.count, c.candles[c.count-1].close);
 }
 
+void display::setMarket(const Market& market) {
+    fprintf(stderr, "market %u %llu %llu\n", market.mark,
+        (unsigned long long)market.longCents, (unsigned long long)market.shortCents);
+}
+
+void display::setCallin(const char* text) { fprintf(stderr,"callin %zu\n",std::string(text).size()); }
 void display::setJoin(const char* glyphs) { fprintf(stderr, "join %zu\n", std::string(glyphs).size()); }
 void display::setQuotes(const uint32_t* cents) {
     fprintf(stderr, "quotes");

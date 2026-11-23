@@ -85,3 +85,20 @@ button{border-radius:0;cursor:pointer;font:inherit}
   #balance{grid-area:2/1/3/3;margin:4px 0 0;font-size:43px}.wallet-pattern{position:absolute;right:16px;bottom:22px;width:41px;height:9px}
   .position,#refill{padding:12px 16px}.calls{margin-top:15px}.call-name{font-size:32px}.threshold{display:grid;gap:3px;padding:8px 10px}
 }
+
+.mark-quote{display:flex;align-items:baseline;gap:8px;margin-top:16px;color:#f9e1dd}
+.mark-quote span,.performance small,.pnl-times{font:700 10px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.07em;color:#b5b4b1}
+.mark-quote b{font-variant-numeric:tabular-nums}
+.performance{margin-top:16px;border:1px solid var(--rule);padding:16px 24px;background:linear-gradient(135deg,#191a1a,#101112)}
+.pnl-head,.pnl-times{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pnl-head h2{font:700 11px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ash);margin:0 0 6px}
+#pnl-value{font:800 28px/1 "Barlow Condensed",sans-serif;font-variant-numeric:tabular-nums}
+#pnl-run{padding:8px;background:#202121;border:1px solid #575959;color:var(--silver);font:12px var(--mono)}
+#pnl-chart{display:block;width:100%;height:auto;max-height:150px;margin:12px 0 6px;background:repeating-linear-gradient(to top,#383838 0 1px,transparent 1px 25%)}
+.pnl-zero{stroke:#898989;stroke-dasharray:3 5}
+@media(max-width:640px){.mark-quote{grid-area:2/2;flex-direction:column;align-items:flex-end;gap:1px;margin-top:6px}.wallet #balance{grid-column:1}.performance{padding:14px 16px}}
+
+.pnl-plot{display:flex;align-items:stretch;margin:12px 0 6px;gap:8px}
+.pnl-scale{display:flex;flex-direction:column;justify-content:space-between;padding:4px 0;color:var(--ash);font:10px/1 var(--mono)}
+.pnl-scale:has(span:first-child:empty){display:none}
+.pnl-plot #pnl-chart{flex:1;min-width:0;height:110px;margin:0}

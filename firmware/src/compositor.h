@@ -5,11 +5,54 @@
 #include "display.h"
 
 namespace compositor {
+struct Levels { float melt, hue; };
+
+class Fade {
+    float from = 0;
+    uint8_t target = 0;
+    uint32_t started = 0;
+    bool moving = false;
+
+public:
+    float sample(uint32_t now) {
+        if (!moving) return target;
+        auto elapsed = now - started;
+        if (elapsed >= 15000) {
+            moving = false;
+            return target;
+        }
+        return from + (target - from) * (float(elapsed) / 15000);
+    }
+
+    void set(uint8_t next, uint32_t now) {
+        if (target == next) return;
+        from = sample(now);
+        target = next;
+        started = now;
+        moving = from != target;
+    }
+
+    bool needsFrame() const { return moving || target; }
+};
+
+class EffectFades {
+    Fade melt, hue;
+
+public:
+    void set(uint8_t m, uint8_t h, uint32_t now) {
+        melt.set(m, now);
+        hue.set(h, now);
+    }
+
+    Levels sample(uint32_t now) { return {melt.sample(now), hue.sample(now)}; }
+    bool needsFrame() const { return melt.needsFrame() || hue.needsFrame(); }
+};
+
 template<class Draw>
 void layers(const display::Stack& stack, Draw draw) {
     int first = 0;
     for (int i = 1; i < stack.count; ++i)
-        if (stack.ids[i] <= 2) first = i;
+        if (stack.ids[i] == 0 || stack.ids[i] == 2) first = i;
     for (int i = first; i < stack.count; ++i) draw(stack.ids[i]);
 }
 
@@ -18,7 +61,7 @@ inline uint8_t channel(int value) {
 }
 
 template<class Pixel>
-void effects(Pixel* pixels, uint8_t melt, uint8_t hue, uint32_t now) {
+void effects(Pixel* pixels, float melt, float hue, uint32_t now) {
     if (!melt && !hue) return;
     float t = float(now % 60000) * (6.2831853f / 60000);
     for (int x = 0; x < 128; ++x) {

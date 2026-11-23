@@ -16,8 +16,8 @@ static uint16_t length, offset;
 static uint8_t payload[maxText + 6];
 struct Draft {
     display::Mode mode;
-    bool ready, hasFields, hasStack, hasChart, hasQuotes, stopped;
-    char join[241];
+    bool ready, hasFields, hasStack, hasChart, hasQuotes, hasMarket, stopped;
+    char join[241], callin[121];
     display::Stack stack;
     uint32_t quotes[6];
     int brightness, preset, effect;
@@ -26,6 +26,7 @@ struct Draft {
     bool hasText[6];
     char path[241];
     display::Chart chart;
+    display::Market market;
 };
 static Draft draft{};
 DMAMEM static char stagedText[6][maxText + 1];
@@ -34,7 +35,7 @@ static void abortDraft() {
     draft.ready = false;
     display::cancelFile();
 }
-static bool valid, liveJoinConfigured;
+static bool valid, liveJoinConfigured, liveCallinConfigured, liveChart, liveMarket, liveQuotes;
 
 void reset() {
     if (state != State::idle && (state == State::method || method == 40 || method == 41 || method == 42)) abortDraft();
@@ -46,6 +47,10 @@ static uint32_t word(const uint8_t* p) {
     return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
 }
 
+static uint64_t wide(const uint8_t* p) {
+    return uint64_t(word(p+4)) << 32 | word(p);
+}
+
 static bool fieldLength(uint8_t id, uint16_t size) {
     if (id < 6) return size >= 4 && size <= maxText + 4;
     if (id <= 12) return size == 1;
@@ -55,6 +60,8 @@ static bool fieldLength(uint8_t id, uint16_t size) {
     if (id == 43) return size == 24;
     if (id == 44) return size >= 2 && size <= 2 + display::widgetCount;
     if (id == 48) return size > 0 && size <= 240;
+    if (id == 49) return size == 20;
+    if (id == 50) return size >= 1 && size <= 120;
     return false;
 }
 
@@ -95,7 +102,7 @@ static bool validPath(const char* path, uint16_t size) {
 static bool includes(uint8_t widget) {
     if (draft.hasStack) return memchr(draft.stack.ids, widget, draft.stack.count) != nullptr;
     if (draft.mode == display::Mode::gif) return widget == 0 || (widget >= 8 && widget < 14);
-    return draft.mode == display::Mode::blood && (widget == 1 || widget == 7);
+    return draft.mode == display::Mode::blood && (widget == 1 || widget == 15 || widget == 16);
 }
 
 static bool acceptsField(uint8_t id) {
@@ -103,8 +110,10 @@ static bool acceptsField(uint8_t id) {
     if (id == 12) return true;
     if (id < 12) return includes(8 + id % 6);
     if (id == 38) return includes(1);
-    if (id == 43) return includes(7);
+    if (id == 43) return includes(7) || includes(16);
+    if (id == 49) return includes(15) || includes(16);
     if (id == 48) return includes(14);
+    if (id == 50) return includes(17);
     return includes(0);
 }
 
@@ -166,14 +175,39 @@ static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
         if (staged) {
             draft.chart = chart;
             draft.hasChart = true;
-        } else display::setChart(chart);
+        } else {
+            display::setChart(chart);
+            liveChart = true;
+        }
     } else if (id == 43) {
         uint32_t quotes[6];
         for (unsigned i = 0; i < 6; ++i) quotes[i] = word(bytes + 4*i);
         if (staged) {
             memcpy(draft.quotes, quotes, sizeof(quotes));
             draft.hasQuotes = true;
-        } else display::setQuotes(quotes);
+        } else {
+            display::setQuotes(quotes);
+            liveQuotes = true;
+        }
+    } else if (id == 49) {
+        display::Market market{word(bytes),wide(bytes+4),wide(bytes+12)};
+        if (!market.mark || market.mark > 1000000) return false;
+        if (staged) {
+            draft.hasMarket = true;
+            draft.market = market;
+        } else {
+            display::setMarket(market);
+            liveMarket = true;
+        }
+    } else if (id == 50) {
+        for (unsigned i = 0; i < size; ++i)
+            if (bytes[i] < 32 || bytes[i] > 126) return false;
+        const char* text = reinterpret_cast<const char*>(bytes);
+        if (staged) strcpy(draft.callin, text);
+        else {
+            display::setCallin(text);
+            liveCallinConfigured = true;
+        }
     } else if (id == 48) {
         char glyphs[241];
         if (!joinGlyphs(bytes, size, glyphs)) return false;
@@ -196,7 +230,13 @@ static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
             draft.stack = stack;
             draft.hasStack = true;
         } else {
-            if (!liveJoinConfigured && memchr(stack.ids, 14, stack.count)) return false;
+            for (unsigned i = 0; i < stack.count; ++i) {
+                uint8_t widget = stack.ids[i];
+                if ((widget == 1 && !liveChart) || (widget == 14 && !liveJoinConfigured) ||
+                    (widget == 17 && !liveCallinConfigured) ||
+                    ((widget == 7 || widget == 16) && !liveQuotes) ||
+                    ((widget == 15 || widget == 16) && !liveMarket)) return false;
+            }
             display::setStack(stack);
         }
     } else {
@@ -211,15 +251,31 @@ static bool field(uint8_t id, uint8_t* bytes, uint16_t size, bool staged) {
 
 static bool take() {
     if (!draft.ready || (includes(1) && !draft.hasChart)) return false;
-    if (draft.hasStack && includes(7) && !draft.hasQuotes) return false;
+    if ((includes(7) || includes(16)) && !draft.hasQuotes) return false;
+    if ((includes(15) || includes(16)) && !draft.hasMarket) return false;
     if (includes(14) && !draft.join[0]) return false;
+    if (includes(17) && !draft.callin[0]) return false;
     if (*draft.path && !display::prepareFile(draft.path)) return false;
     display::beginTake();
     display::setMode(draft.mode);
     if (draft.hasStack) display::setStack(draft.stack);
     if (includes(0)) display::applySource(draft.preset, draft.path, draft.stopped);
-    if (draft.hasChart) display::setChart(draft.chart);
-    if (draft.hasQuotes) display::setQuotes(draft.quotes);
+    if (draft.hasChart) {
+        liveChart = true;
+        display::setChart(draft.chart);
+    }
+    if (draft.hasQuotes) {
+        liveQuotes = true;
+        display::setQuotes(draft.quotes);
+    }
+    if (draft.hasMarket) {
+        liveMarket = true;
+        display::setMarket(draft.market);
+    }
+    if (draft.callin[0]) {
+        display::setCallin(draft.callin);
+        liveCallinConfigured = true;
+    }
     if (draft.join[0]) {
         display::setJoin(draft.join);
         liveJoinConfigured = true;

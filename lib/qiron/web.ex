@@ -8,7 +8,7 @@ defmodule Qiron.Web do
     at: "/",
     from: {:qiron, "priv/static"},
     only:
-      ~w(style.css compositor.css stage.css screen-cues.js splice-jfk.png splice-911.png mixer.js compositor.js exchange.css app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif peter-thiel.gif santa.gif archivo-black.ttf barlow-condensed.ttf)
+      ~w(style.css compositor.css stage.css screen-cues.js phrase-picker.js splice-jfk.png splice-911.png mixer.js compositor.js exchange.css pnl.js app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif peter-thiel.gif santa.gif archivo-black.ttf barlow-condensed.ttf)
   )
 
   plug(:match)
@@ -19,10 +19,20 @@ defmodule Qiron.Web do
   get("/", do: page(conn, "audience"))
   get("/stage", do: page(conn, "stage"))
   get("/operator", do: page(conn, "operator"))
-  get("/api/stage", do: respond(conn, Market.call(:stage)))
+  get("/api/stage", do: respond_scene(conn, Market.call(:stage)))
+
+  get "/api/operator/phrases" do
+    path =
+      System.get_env("QYRON_PHRASES_FILE") ||
+        Application.app_dir(:qiron, "priv/booth/phrases.json")
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_file(200, path)
+  end
 
   get "/api/panel" do
-    respond(conn, Qiron.Panel.status())
+    respond_scene(conn, Qiron.Panel.status())
   end
 
   get "/api/me" do
@@ -141,7 +151,12 @@ defmodule Qiron.Web do
       conn.method == "POST" and get_req_header(conn, "x-qiron") != ["1"] ->
         conn |> send_resp(403, "Forbidden") |> halt()
 
-      Plug.Router.match_path(conn) in ["/operator", "/api/operator", "/api/panel"] ->
+      Plug.Router.match_path(conn) in [
+        "/operator",
+        "/api/operator",
+        "/api/operator/phrases",
+        "/api/panel"
+      ] ->
         password = System.get_env("OPERATOR_PASSWORD", "")
 
         if String.length(password) >= 3 do
@@ -176,6 +191,17 @@ defmodule Qiron.Web do
     end
   end
 
+  defp respond_scene(conn, scene) do
+    respond(conn, %{
+      scene
+      | long_oi_cents: json_cents(scene.long_oi_cents),
+        short_oi_cents: json_cents(scene.short_oi_cents)
+    })
+  end
+
+  defp json_cents(value) when value > 9_007_199_254_740_991, do: Integer.to_string(value)
+  defp json_cents(value), do: value
+
   defp respond(conn, :wrong_mode),
     do: send_resp(conn, 409, "Add the corresponding widget to use this control.")
 
@@ -185,7 +211,7 @@ defmodule Qiron.Web do
   defp respond(conn, :not_ready), do: send_resp(conn, 409, "Draft is not ready on the panel.")
 
   defp respond(conn, :liquidated),
-    do: send_resp(conn, 409, "Claim your next slug when the cooldown ends.")
+    do: send_resp(conn, 409, "Your next slug arrives when the cooldown ends.")
 
   defp respond(conn, :offline),
     do: send_resp(conn, 503, "Panel disconnected or acknowledgment timed out")
@@ -193,10 +219,10 @@ defmodule Qiron.Web do
   defp respond(conn, :rejected), do: send_resp(conn, 502, "Panel rejected command")
 
   defp respond(conn, :invalid_preset_name),
-    do: send_resp(conn, 422, "Use a stack name of 1 to 48 characters on one line.")
+    do: send_resp(conn, 422, "Use a scene name of 1 to 48 characters on one line.")
 
   defp respond(conn, :duplicate_preset_name),
-    do: send_resp(conn, 422, "A saved stack already has that name.")
+    do: send_resp(conn, 422, "A saved scene already has that name.")
 
   defp respond(conn, :invalid), do: send_resp(conn, 422, "Invalid command")
   defp respond(conn, :ok), do: respond(conn, %{ok: true})

@@ -51,9 +51,10 @@ function account(data) {
   showQuotes();
   const busted = data.refill_in !== null;
   el("balance").textContent = fmt(data.piss_coin);
+  el("blood-price").textContent = fmt(data.mark_cents / 100);
+  drawPnl(data);
   el("refill").hidden = !busted;
   el("leverage").disabled = busted;
-  el("claim").disabled = !busted || data.refill_in > 0 || busy;
   if (busted) {
     const seconds = data.refill_in;
     el("cooldown").textContent = seconds
@@ -80,11 +81,8 @@ function stage(data) {
   el("hold").disabled = false;
   el("marketmeta").textContent =
     (held ? "Drift held" : "Random drift on") +
-    " · " +
-    data.up +
-    " up / " +
-    data.down +
-    " down";
+    " · Open interest in PISS COIN · Long " + fmt((data.long_oi_cents ?? 0) / 100) +
+    " / Short " + fmt((data.short_oi_cents ?? 0) / 100);
 }
 
 async function refresh() {
@@ -121,7 +119,7 @@ async function command(payload, message, path = view === "audience" ? "trade" : 
 }
 if (view === "audience") {
   el("leverage").oninput = showQuotes;
-  el("claim").onclick = () => command({}, "Slug received.", "refill");
+  el("pnl-run").onchange = () => { if (latestAccount) drawPnl(latestAccount); };
   for (const side of ["up", "down", "flat"]) {
     el(side === "flat" ? "close" : side).onclick = () =>
       command(

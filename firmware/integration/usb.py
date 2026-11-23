@@ -40,6 +40,24 @@ with tempfile.TemporaryDirectory() as work:
                     assert usb.read(1) + usb.read(1) == bytes([254, 0 if accepted else 1])
 
                 chart = struct.pack("<7I", 12300, 92, 4, 10100, 12500, 9900, 12300)
+                market = struct.pack("<IQQ", 14550, 5000000, 18446744073709551615)
+                for bad in [market[:-1], market+b"x", bytes(20)]:
+                    send(49, bad, False)
+                send(44,bytes([0,0,15]),False)
+                send(49,market)
+                send(40, bytes([0]))
+                send(41, bytes([44,0,0,17]))
+                send(42, b"", False)
+                send(44, bytes([0,0,17]), False)
+                for bad in (b"", b"x"*121, b"hi\x00", b"\n", b"\x7f", b"\xc3\xa9"):
+                    send(50,bad,False)
+                send(40, bytes([1]))
+                send(41, bytes([50])+b"wrong widget", False)
+                send(40, bytes([0]))
+                send(41, bytes([44,0,0,17]))
+                send(41, bytes([50])+b"TELETHON CALL-IN")
+                send(50,b"X"*120)
+                send(42, b"")
                 for mode in (0, 1, 2, 3, 4):
                     send(37, bytes([mode]))
                 send(37, bytes([5]), False)
@@ -61,6 +79,8 @@ with tempfile.TemporaryDirectory() as work:
                 send(42, b"", False)
                 send(40, bytes([1]))
                 send(41, bytes([38]) + chart)
+                send(41, bytes([49]) + market)
+                send(41, bytes([43]) + bytes(24))
                 send(38, struct.pack("<7I", 10400, 1, 4, 10100, 11000, 10000, 10400))
                 send(42, b"")
                 send(42, b"", False)
@@ -90,9 +110,9 @@ with tempfile.TemporaryDirectory() as work:
                 send(43, quotes)
                 send(43, quotes[:-1], False)
                 send(43, quotes + b"x", False)
-                send(44, bytes([0, 100, *range(15)]))
-                for layout in ([0], [0, 0, 15], [0, 0, 5, 5], [101, 0], [0, 101],
-                               [0, 0, *range(16)]):
+                send(44, bytes([0, 100, *range(18)]))
+                for layout in ([0], [0, 0, 18], [0, 0, 5, 5], [101, 0], [0, 101],
+                               [0, 0, *range(19)]):
                     send(44, bytes(layout), False)
                 send(45, bytes([101, 0]), False)
                 send(45, bytes([0, 101]), False)
@@ -104,13 +124,22 @@ with tempfile.TemporaryDirectory() as work:
                     send(41, bytes([44, 0, 0, *layout]))
                     send(41, bytes(field), False)
                     send(42, b"", False)
-                for widget in (1, 7, 14):
+                for widget in (1, 7, 14, 15, 16):
                     send(40, bytes([0]))
                     send(41, bytes([44, 0, 0, widget]))
                     send(42, b"", False)
                 send(40, bytes([1]))
                 send(41, bytes([44, 0, 100]))
                 send(42, b"")
+                for partial in ([49, *market], [43, *quotes]):
+                    send(40, bytes([1]))
+                    send(41, bytes([44,0,0,16]))
+                    send(41, bytes(partial))
+                    send(42, b"", False)
+                send(40,bytes([1]))
+                send(41,bytes([44,0,0,15]))
+                send(41,bytes([49])+market)
+                send(42,b"")
                 send(40, bytes([4]))
                 send(41, bytes([44, 10, 20, 0, 5, 6, 9, 1, 7]))
                 send(41, bytes([39]) + b"/gifs/joker/caw.gif")
@@ -140,18 +169,20 @@ with tempfile.TemporaryDirectory() as work:
         events.seek(0)
         assert events.read().splitlines() == [
             b"start 0 -1 " + TEXT, b"effect 36", b"speed 0 255", b"brightness 32",
-            b"mode 0", b"mode 1", b"mode 2", b"mode 3", b"mode 4",
+            b"market 14550 5000000 18446744073709551615", b"callin 120", b"beginTake", b"mode 0", b"stack 0 0 17", b"callin 16", b"endTake", b"mode 0", b"mode 1", b"mode 2", b"mode 3", b"mode 4",
             b"beginTake", b"mode 3", b"brightness 100", b"endTake",
             b"beginTake", b"mode 4", b"brightness 100", b"endTake", b"chart 12300 92 4 1 12300",
-            b"chart 10400 1 4 1 10400", b"beginTake", b"mode 1", b"chart 12300 92 4 1 12300", b"endTake",
+            b"chart 10400 1 4 1 10400", b"beginTake", b"mode 1", b"chart 12300 92 4 1 12300",
+            b"quotes 0 0 0 0 0 0", b"market 14550 5000000 18446744073709551615", b"endTake",
             b"prepare preset 0", b"beginTake", b"mode 0", b"source 0 /gifs/joker/caw.gif 1",
             b"speed 0 42", b"start 0 -1 SHOW", b"effect 17", b"brightness 90", b"endTake",
             b"beginTake", b"mode 0", b"source 1  1", b"endTake",
             b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake",
             b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake",
             b"join 240", b"join 2", b"beginTake", b"mode 1", b"stack 0 0 1 14", b"chart 12300 92 4 1 12300", b"join 6", b"endTake",
-            b"quotes 0 5 48 7816 255 4294967295", b"stack 0 100 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14",
+            b"quotes 0 5 48 7816 255 4294967295", b"stack 0 100 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17",
             b"beginTake", b"mode 1", b"stack 0 100", b"endTake",
+            b"beginTake", b"mode 1", b"stack 0 0 15", b"market 14550 5000000 18446744073709551615", b"endTake",
             b"quotes 0 0 0 0 0 0", b"fx 100 0", b"burst 1 2271560481", b"splice 60", b"burst 2 0", b"splice 5", b"splice 0", b"beginTake", b"mode 4",
             b"stack 10 20 0 5 6 9 1 7", b"source -1 /gifs/joker/caw.gif 0",
             b"chart 12300 92 4 1 12300", b"quotes 0 5 48 7816 255 4294967295",

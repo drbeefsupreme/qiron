@@ -13,11 +13,12 @@ stageLines.forEach((id, i) => {
   stageText.append(term, value);
 });
 
-const widgetNames = {sd: "Panel SD", chart: "Blood Futures", ticker: "Ticker", join: "Audience join banner", ...stageTitles};
+const widgetNames = {sd: "Panel SD", chart: "Candlestick chart", price: "Baby Blood price", interest: "Open interest and ticker", ticker: "Ticker", join: "Audience join banner", callin: "Telethon call-in", ...stageTitles};
 let previousWidgets;
 
 function renderStage(data) {
-  const widgets = data.widgets || (data.mode === "gif" ? ["sd", ...stageLines] : [stageSource[data.mode]]);
+  const defaults = {gif: ["sd", ...stageLines], blood: ["chart", "price", "interest"]};
+  const widgets = data.widgets || defaults[data.mode] || [stageSource[data.mode]];
   stageCanvas.update(data);
   const title = data.preset_name || stageTitles[data.mode] || "Stage mix";
   el("stage-title").textContent = title;
@@ -31,17 +32,29 @@ function renderStage(data) {
       if (i) caption.append(" / ");
       const label = document.createElement("span");
       label.textContent = widgetNames[id] || (id === "lineF" ? "Feature line" : "Line " + id.slice(4));
-      if (stageSource[id] === id) label.id = "stage-" + id;
+      if (id === "callin" || stageSource[id] === id) label.id = "stage-" + id;
       caption.append(label);
     });
     el("stage-gif").hidden = !widgets.includes("sd");
-    el("stage-blood").hidden = !widgets.includes("chart");
+    el("stage-price").hidden = !widgets.includes("price");
+    el("stage-interest").hidden = !widgets.includes("interest");
+    el("stage-chart").hidden = !widgets.includes("chart");
+    const summary = ["chart", "price", "interest"].filter(id => widgets.includes(id));
+    el("stage-blood").hidden = !summary.length;
+    el("stage-canvas").setAttribute("aria-describedby", ["stage-layers", ...summary.map(id => "stage-" + id)].join(" "));
   }
+  if (widgets.includes("callin")) el("stage-callin").textContent = data.callin_banner || "TELETHON CALL-IN";
   const gif = data.gif || {};
   el("stage-file").textContent = gif.playing === false ? "SD playback stopped" :
     "Panel SD playback · " + (gif.file || "preset " + gif.preset) + " · Media is available on the physical panel only.";
-  el("bulls").textContent = data.up;
-  el("bears").textContent = data.down;
+  el("long-oi").textContent = fmt((data.long_oi_cents ?? 0) / 100);
+  el("short-oi").textContent = fmt((data.short_oi_cents ?? 0) / 100);
+  const candles = data.candles || [];
+  const bar = candles[candles.length - 1];
+  el("stage-chart").textContent = bar
+    ? "Latest candle · Open " + fmt(bar.open / 100) + " · High " + fmt(bar.high / 100) +
+      " · Low " + fmt(bar.low / 100) + " · Close " + fmt(bar.close / 100)
+    : "Awaiting first candle";
   let hasText = false;
   stageLines.forEach((id, i) => {
     const layer = (data.layers || []).find(item => item.id === i + 1);

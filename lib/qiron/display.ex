@@ -1,11 +1,11 @@
 defmodule Qiron.Display do
-  @ids ~w(sd chart intro crow beef peter santa ticker line1 line2 line3 line4 line5 lineF join)
+  @ids ~w(sd chart intro crow beef peter santa ticker line1 line2 line3 line4 line5 lineF join price interest callin)
        |> Enum.with_index()
        |> Map.new()
   @gif_widgets ~w(sd line1 line2 line3 line4 line5 lineF)
   @defaults %{
     "gif" => @gif_widgets,
-    "blood" => ~w(chart ticker),
+    "blood" => ~w(chart price interest),
     "intro" => ["intro"],
     "crow" => ["crow"],
     "beef" => ["beef"]
@@ -71,6 +71,23 @@ defmodule Qiron.Display do
     line
   end
 
+  def callin_banner! do
+    number = System.get_env("QYRON_CALLIN_NUMBER", "") |> String.trim()
+
+    if number == "" do
+      "TELETHON CALL-IN"
+    else
+      banner = "CALL " <> number
+
+      unless byte_size(banner) <= 120 and Regex.match?(~r/\A[ -~]+\z/, banner) do
+        raise ArgumentError,
+              "QYRON_CALLIN_NUMBER must form a banner of at most one hundred twenty printable ASCII bytes including the CALL prefix"
+      end
+
+      banner
+    end
+  end
+
   def line_widget(6), do: "lineF"
   def line_widget(id), do: "line#{id}"
 
@@ -89,6 +106,11 @@ defmodule Qiron.Display do
     keys = if mode == "gif", do: [:brightness, :lines, :speeds, :gif], else: [:brightness]
     struct!(builtin(mode), Map.take(old, keys))
   end
+
+  def migrate_blood_widgets(%{preset_id: "blood", widgets: ["chart", "ticker"]} = scene),
+    do: %{scene | widgets: Map.fetch!(@defaults, "blood")}
+
+  def migrate_blood_widgets(scene), do: scene
 
   def restore_presets(old, draft) do
     remembered = Map.get(old, :templates, %{})

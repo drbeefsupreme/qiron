@@ -72,3 +72,39 @@ body[data-view="operator"] .eyebrow { margin-bottom: 0; }
   .mix-monitor #sd-preview { margin-top: 0; }
   .booth-panel { padding: 14px; }
 }
+
+#phrase-picker { padding: 12px 14px; border-top: 1px solid var(--edge); }
+#phrase-picker summary { cursor: pointer; font-weight: 700; }
+#phrase-picker label { display: grid; gap: 4px; margin: 12px 0; }
+#phrase-picker p { color: inherit; }
+#phrase-picker select { max-width: 100%; }
+#phrase-preview { white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; max-height: 12rem; line-height: 1.5; background: #161c17; padding: 10px; }
+#phrase-status { margin-top: 8px; }
+
+body[data-view="operator"] {
+  color-scheme: dark;
+  min-height: 100vh;
+  --ink: #131414;
+  --console: #1a1b1c;
+  --edge: #4a4a4a;
+  --rule: #444646;
+  --red: #ff665d;
+  background: linear-gradient(135deg,#0a0a0a,#1a1a1a 50%,#0a0a0a);
+  color: #eeeded;
+}
+body[data-view="operator"] header { border-color: #595b5c; color: #d9dadb; }
+body[data-view="operator"] h1 { color: #eceded; text-shadow: 0 2px #646568; }
+body[data-view="operator"] .ticket,.preset-sidebar { background: #161718; border: 1px solid var(--edge); border-top: 2px solid #888b8e; }
+body[data-view="operator"] :is(input:not([type=range]):not([type=checkbox]),select,textarea) {
+  background: #0e0f10; color: #e5e5e6; border: 1px solid #5b5d5f;
+}
+body[data-view="operator"] button { background: #292b2d; color: #f2f2f2; border-color: #64676a; }
+body[data-view="operator"] :focus-visible { outline: 2px solid #d4f795; outline-offset: 2px; }
+body[data-view="operator"] .ticket p,body[data-view="operator"] footer { color: #bbbdbf; }
+body[data-view="operator"] .booth-panel .take-bar { border-color: var(--edge); }
+body[data-view="operator"] #take-live { background: #ba312b; color: #fff; }
+body[data-view="operator"] #melt-live { background: #493351; }
+body[data-view="operator"] :is(#panel-error,#error) { color: #ff958e; }
+body[data-view="operator"] header .network i { color: #101111; background: #b9bcbe; }
+#preset-rail button { background: #292b2d; color: #d9dadb; }
+#preset-rail button[aria-pressed="true"] { background: #d8d9db; color:#101112; border-left-color:#b5e879; }

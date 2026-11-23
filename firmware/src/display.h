@@ -4,14 +4,20 @@
 
 namespace display {
 enum class Mode : uint8_t { gif, blood, intro, crow, beef };
-constexpr uint8_t widgetCount = 15;
+constexpr uint8_t widgetCount = 18;
 struct Stack { uint8_t count, ids[widgetCount], melt, hue; };
 void setJoin(const char* glyphs);
+void setCallin(const char* text);
 void setStack(const Stack& stack);
 void setQuotes(const uint32_t* cents);
 void triggerBurst(uint8_t kind, uint32_t seed);
 void setSpliceInterval(uint8_t seconds);
 void setFx(uint8_t melt, uint8_t hue);
+struct Market {
+    uint32_t mark;
+    uint64_t longCents, shortCents;
+};
+void setMarket(const Market& market);
 struct Candle { uint32_t open, high, low, close; };
 struct Chart {
     uint32_t mark, bullish, bearish;

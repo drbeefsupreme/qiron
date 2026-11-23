@@ -134,7 +134,7 @@ defmodule Qiron.Panel do
       {:ok, s} ->
         s =
           case frame do
-            {41, <<id, payload::binary>>} when id in [38, 43] ->
+            {41, <<id, payload::binary>>} when id in [38, 43, 49] ->
               %{s | staged_fields: Map.put(s.staged_fields, id, {id, payload})}
 
             _ ->
@@ -253,22 +253,36 @@ defmodule Qiron.Panel do
       end
 
     staged = Enum.map(fields ++ lines ++ gif_fields ++ market_fields(data), &field/1)
-    join = if "join" in data.widgets, do: [{41, :join_banner}], else: []
-    [{40, <<Map.fetch!(@modes, data.mode)>>} | staged ++ join]
+
+    banners =
+      for {id, banner} <- [{"join", :join_banner}, {"callin", :callin_banner}],
+          id in data.widgets,
+          do: {41, banner}
+
+    [{40, <<Map.fetch!(@modes, data.mode)>>} | staged ++ banners]
   end
 
   defp market_fields(data) do
-    Enum.flat_map(data.widgets, fn
-      "chart" ->
-        [chart(data)]
+    charts = if "chart" in data.widgets, do: [chart(data)], else: []
 
-      "ticker" ->
+    quotes =
+      if "ticker" in data.widgets or "interest" in data.widgets do
         prices = for t <- data.tickers, into: <<>>, do: <<t.price_cents::little-32>>
         [{43, prices}]
-
-      _ ->
+      else
         []
-    end)
+      end
+
+    summary =
+      if "price" in data.widgets or "interest" in data.widgets do
+        long = min(data.long_oi_cents, 0xFFFFFFFFFFFFFFFF)
+        short = min(data.short_oi_cents, 0xFFFFFFFFFFFFFFFF)
+        [{49, <<data.mark_cents::little-32, long::little-64, short::little-64>>}]
+      else
+        []
+      end
+
+    charts ++ quotes ++ summary
   end
 
   defp chart(data) do
@@ -338,6 +352,7 @@ defmodule Qiron.Panel do
     end
   end
 
+  defp transmit(s, {41, :callin_banner}), do: transmit(s, field({50, Display.callin_banner!()}))
   defp transmit(s, {41, :join_banner}), do: transmit(s, field({48, Display.join_banner!()}))
 
   defp transmit(%{port: port} = s, {method, payload}) do

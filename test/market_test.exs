@@ -78,7 +78,7 @@ defmodule Qiron.MarketTest do
   end
 
   @tag :tmp_dir
-  test "a saved seat can claim one slug after its five-minute wait", %{tmp_dir: dir} do
+  test "a saved seat automatically gets one slug after its five-minute wait", %{tmp_dir: dir} do
     path = Path.join(dir, "show")
 
     seat = %{
@@ -91,9 +91,7 @@ defmodule Qiron.MarketTest do
 
     File.write!(path, :erlang.term_to_binary(%Market{players: %{"a" => seat}}))
     pid = start_supervised!({Market, path: path, tick: false})
-    assert %{refill_in: 0} = Market.call({:account, "a"}, pid)
-    assert :liquidated = Market.call({:trade, "a", "up", 50}, pid)
-    assert %{piss_coin: 50_000.0, refill_in: nil} = Market.call({:refill, "a"}, pid)
+    assert %{piss_coin: 50_000.0, refill_in: nil} = Market.call({:account, "a"}, pid)
     assert :invalid = Market.call({:refill, "a"}, pid)
 
     for bad <- [0, 51, 1.5, "50", nil],

@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0c0d0d">
   <title>Blood Futures · Too Late TV</title>
   <link rel="stylesheet" href="/exchange.css">
+  <script defer src="/pnl.js"></script>
   <script defer src="/app.js"></script>
 </head>
 <body data-view="audience">
@@ -29,7 +30,7 @@
         <h2>Balance</h2>
         <strong id="balance">—</strong>
         <span class="currency"><i aria-hidden="true">₱</i> PISS COIN</span>
-        <div class="wallet-pattern" aria-hidden="true"></div>
+        <div class="mark-quote"><span>Baby Blood</span><b id="blood-price">—</b></div>
       </div>
       <div class="order">
         <label for="leverage" class="lev-label">Leverage <output id="multiplier" for="leverage">1×</output></label>
@@ -49,7 +50,15 @@
       <section class="position" aria-label="Current position">
         <h2>Position</h2><strong id="side">—</strong><span id="active-liq"></span><button type="button" id="close" hidden>Close position</button>
       </section>
-      <div id="refill" hidden><p id="cooldown"></p><button id="claim" disabled>Claim 50,000 PISS COIN</button></div>
+      <div id="refill" hidden><p id="cooldown"></p></div>
+    </section>
+    <section class="performance" aria-labelledby="pnl-title">
+      <div class="pnl-head"><div><h2 id="pnl-title">Your P&amp;L</h2><span id="pnl-value">—</span> <small>PISS COIN · <span id="pnl-slug">—</span></small></div>
+        <select id="pnl-run" aria-label="Portfolio history"><option value="all">All slugs</option></select>
+      </div>
+      <div class="pnl-plot"><div class="pnl-scale" aria-hidden="true"><span id="pnl-high"></span><span id="pnl-low"></span></div>
+      <svg preserveAspectRatio="none" id="pnl-chart" viewBox="0 0 480 120" role="img" aria-label="Personal profit and loss over time"></svg></div>
+      <div class="pnl-times"><span id="pnl-from">—</span><span id="pnl-to">—</span></div>
     </section>
     <p role="status" class="sr" id="receipt"></p><p role="alert" id="error"></p>
   </main>

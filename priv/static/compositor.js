@@ -7,7 +7,7 @@
   };
   const cache = new Map();
   const lineIds = ["line1", "line2", "line3", "line4", "line5", "lineF"];
-  const legacy = {gif: ["sd", ...lineIds], blood: ["chart"]};
+  const legacy = {gif: ["sd", ...lineIds], blood: ["chart", "price", "interest"]};
   const colors = ["#fff", "#fff70e", "#c02336", "#0000ff", "#f00", "#fff"];
   const speeds = [10, 20, 40, 80, 120, 40];
   const mod = (n, m) => ((n % m) + m) % m;
@@ -204,27 +204,42 @@
   }
 
   function chart(g, scene) {
-    g.fillStyle = "#050811";
-    g.fillRect(0, 0, width, height);
-    lettering(g, fonts.small, "#fe4455", "CROW BLOOD", 3, 1);
-    const candles = scene.candles || [];
-    if (!candles.length) {
-      lettering(g, fonts.small, "#f8efc9", "AWAITING MARK", 3, 17);
-      return;
-    }
-    lettering(g, fonts.large, "#f8efc9", ((scene.mark_cents || 0) / 100).toFixed(2), 3, 10);
-    const low = Math.min(...candles.map(c => c.low)), high = Math.max(...candles.map(c => c.high));
-    const y = price => high === low ? 51 : 73 - Math.floor((price - low) * 44 / (high - low));
+    g.clearRect(0, 0, width, height);
     g.fillStyle = "#253b41";
     for (let row = 29; row <= 73; row += 11) g.fillRect(3, row, 122, 1);
+    const candles = scene.candles || [];
+    if (!candles.length) return;
+    const low = Math.min(...candles.map(c => c.low)), high = Math.max(...candles.map(c => c.high));
+    const y = price => high === low ? 51 : 73 - Math.floor((price - low) * 44 / (high - low));
     candles.forEach((c, i) => {
       const x = 122 - (candles.length - i - 1) * 5;
       g.fillStyle = c.close >= c.open ? "#4cf19c" : "#fe4455";
       g.fillRect(x, y(c.high), 1, y(c.low) - y(c.high) + 1);
       g.fillRect(x - 1, Math.min(y(c.open), y(c.close)), 3, Math.abs(y(c.open) - y(c.close)) + 1);
     });
-    lettering(g, fonts.small, "#4cf19c", "BULL " + (scene.up || 0), 3, 78);
-    lettering(g, fonts.small, "#fe4455", "BEAR " + (scene.down || 0), 66, 78);
+  }
+
+  function price(g, scene) {
+    lettering(g, fonts.small, "#fe4455", "BABY BLOOD", 3, 1);
+    lettering(g, fonts.large, "#f8efc9", (scene.mark_cents / 100).toFixed(2), 3, 10);
+  }
+
+  function notional(cents) {
+    const amount = BigInt(cents ?? 0);
+    if (amount < 100000n) return String(Number(amount) / 100);
+    let scale = 100000n, index = 0;
+    const suffix = "KMBTQ";
+    while (index < suffix.length-1 && amount >= scale*1000n) {
+      scale *= 1000n;
+      ++index;
+    }
+    const tenth = amount % scale * 10n / scale;
+    return String(amount / scale) + (tenth ? "." + tenth : "") + suffix[index];
+  }
+
+  function interest(g, scene) {
+    lettering(g, fonts.small, "#4cf19c", "LONG " + notional(scene.long_oi_cents), 3, 78);
+    lettering(g, fonts.small, "#fe4455", "SHORT " + notional(scene.short_oi_cents), 66, 78);
   }
 
   const scrollFonts = [fonts.bold, fonts.normal, fonts.large, fonts.side, fonts.small, fonts.small];
@@ -251,17 +266,19 @@
     g.restore();
   }
 
-  function joinBanner(g, value, elapsed) {
-    g.fillStyle = "#080d1c";
-    g.fillRect(0, 0, width, 9);
+  function banner(g, value, elapsed, top, background) {
+    g.fillStyle = background;
+    g.fillRect(0, top, width, 9);
     if (!value) return;
     const text = Array.from(value, ch => ch >= " " && ch <= "~" ? ch : "?").join("");
     const span = text.length * fonts.small.w + 18;
     for (let x = -(Math.floor(elapsed / 50) % span); x < width; x += span)
-      lettering(g, fonts.small, "#fff0a8", text, x, 1);
+      lettering(g, fonts.small, "#fff0a8", text, x, top + 1);
   }
 
   function ticker(g, quotes, elapsed) {
+    g.fillStyle = "#000";
+    g.fillRect(0, 87, width, 9);
     if (!quotes || !quotes.length) return;
     const labels = quotes.map(q => q.symbol + " " + (q.price_cents / 100).toFixed(2));
     const advances = labels.map(label => label.length * 5 + 12);
@@ -272,6 +289,24 @@
         if (x + advances[i] > 0 && x < width) lettering(g, fonts.small, quotes[i].color, label, x, 88);
         x += advances[i];
       });
+    }
+  }
+
+  class EffectRamp {
+    from = 0;
+    target = 0;
+    started = 0;
+
+    level(now) {
+      const progress = Math.min(1, Math.max(0, (now - this.started) / 15000));
+      return this.from + (this.target - this.from) * progress;
+    }
+
+    set(target, now) {
+      if (target === this.target) return;
+      this.from = this.level(now);
+      this.target = target;
+      this.started = now;
     }
   }
 
@@ -314,9 +349,10 @@
     canvas.height = height;
     const g = canvas.getContext("2d", {alpha: false, willReadFrequently: true});
     const started = new Map();
+    const meltRamp = new EffectRamp(), hueRamp = new EffectRamp();
     const chartCanvas = surface(width, height);
     let scene, visible = [], layers = [], motion = [], request = 0, previousFrame = -Infinity;
-    let destroyed = false;
+    let destroyed = false, tickerStart = null;
     let cueStart = 0, spliceStart = 0, splicePeriod = 0, lastSlot = 0;
 
     function render(now) {
@@ -335,10 +371,17 @@
           }
         } else if (id === "chart") {
           g.drawImage(chartCanvas, 0, 0);
+        } else if (id === "price") {
+          price(g, scene);
+        } else if (id === "interest") {
+          interest(g, scene);
+          ticker(g, scene.tickers, now - tickerStart);
         } else if (id === "join") {
-          joinBanner(g, scene.join_banner, elapsed);
+          banner(g, scene.join_banner, elapsed, 0, "#080d1c");
+        } else if (id === "callin") {
+          banner(g, scene.callin_banner || "TELETHON CALL-IN", elapsed, 87, "#000");
         } else if (id === "ticker") {
-          ticker(g, scene.tickers, elapsed);
+          ticker(g, scene.tickers, now - tickerStart);
         } else if (Object.prototype.hasOwnProperty.call(films, id)) {
           const entry = film(id);
           if (entry.draw) entry.draw(g, elapsed);
@@ -352,7 +395,8 @@
           }
         }
       }
-      if (scene.melt || scene.hue) effects(g, scene.melt || 0, scene.hue || 0, now);
+      const melt = meltRamp.level(now), hue = hueRamp.level(now);
+      if (melt || hue) effects(g, melt, hue, now);
       if (scene.screen_cue) {
         const elapsed = Math.max(0, now - cueStart);
         if (elapsed < 10000) {
@@ -380,6 +424,8 @@
       update(nextScene) {
         if (destroyed) return;
         const now = performance.now();
+        meltRamp.set(nextScene.melt ?? 0, now);
+        hueRamp.set(nextScene.hue ?? 0, now);
         const cue = nextScene.screen_cue;
         if (cue && (!scene || !scene.screen_cue || cue.seed !== scene.screen_cue.seed || cue.kind !== scene.screen_cue.kind))
           cueStart = now - cue.elapsed_ms;
@@ -395,11 +441,13 @@
         splicePeriod = period;
         scene = nextScene;
         const widgets = scene.widgets || legacy[scene.mode] || [scene.mode];
+        if (widgets.includes("ticker") || widgets.includes("interest")) tickerStart ??= now;
+        else tickerStart = null;
         for (const id of started.keys()) if (!widgets.includes(id)) started.delete(id);
         for (const id of widgets) if (!started.has(id)) started.set(id, now);
         let first = 0;
         widgets.forEach((id, i) => {
-          if (id === "sd" || id === "intro" || id === "chart") first = i;
+          if (id === "sd" || id === "intro") first = i;
         });
         visible = widgets.slice(first);
         if (visible.includes("chart")) chart(chartCanvas.getContext("2d"), scene);

@@ -1,6 +1,6 @@
 defmodule Qiron.Market do
   use GenServer
-  alias Qiron.Display
+  alias Qiron.{Display, PnlHistory}
 
   @min_mark 100
   @max_mark 1_000_000
@@ -23,6 +23,7 @@ defmodule Qiron.Market do
             display: %Display{},
             draft: nil,
             presets: %{},
+            blood_layout_version: 2,
             revision: 0,
             pending_action: nil,
             candles: [],
@@ -34,7 +35,9 @@ defmodule Qiron.Market do
   def call(command, server \\ __MODULE__), do: GenServer.call(server, command)
 
   def init(opts) do
+    Code.ensure_loaded!(PnlHistory)
     Display.join_banner!()
+    Display.callin_banner!()
     path = Keyword.fetch!(opts, :path)
 
     show =
@@ -62,6 +65,24 @@ defmodule Qiron.Market do
     next = struct(__MODULE__, Map.delete(show, :__struct__))
     next = %{next | display: Display.restore(display), draft: draft, presets: presets}
 
+    next =
+      if Map.get(show, :blood_layout_version, 1) < 2 do
+        presets =
+          Map.update!(presets, "blood", fn saved ->
+            %{saved | scene: Display.migrate_blood_widgets(saved.scene)}
+          end)
+
+        %{
+          next
+          | display: Display.migrate_blood_widgets(next.display),
+            draft: Display.migrate_blood_widgets(next.draft),
+            presets: presets,
+            blood_layout_version: 2
+        }
+      else
+        next
+      end
+
     restored = persist(next |> migrate_accounts() |> record_mark(), show, path)
     {:ok, {restored, path, arm_splice(%{cue: nil})}}
   end
@@ -69,7 +90,7 @@ defmodule Qiron.Market do
   def handle_info(:tick, {s, path, fx}) do
     next =
       if s.held do
-        record_mark(s)
+        s |> observe_players(s.mark) |> record_mark()
       else
         step = :rand.uniform(2 * s.volatility_bps + 1) - s.volatility_bps - 1
         move(s, div(s.mark * (10_000 + step) + 5_000, 10_000))
@@ -149,18 +170,22 @@ defmodule Qiron.Market do
   end
 
   defp apply_command(:stage, s), do: {s, stage(s)}
-  defp apply_command({:account, id}, s), do: {s, account(s, id)}
+
+  defp apply_command({:account, id}, s) do
+    {s, p, at} = seat(s, id)
+    {s, account(s, id, p, at)}
+  end
 
   defp apply_command({:trade, id, side, leverage}, s)
        when side in ["up", "down", "flat"] and leverage in 1..50 do
-    p = player(s, id)
+    {s, p, at} = seat(s, id)
 
     cond do
       p.refill_at != nil ->
         {s, :liquidated}
 
       p.side == side ->
-        {s, account(s, id)}
+        {s, account(s, id, p, at)}
 
       true ->
         next = %{
@@ -171,19 +196,20 @@ defmodule Qiron.Market do
             leverage: if(side == "flat", do: 1, else: leverage)
         }
 
-        save_player(s, id, next)
+        next = %{next | pnl_runs: PnlHistory.sample(p.pnl_runs, at, next.bank - @slug)}
+        save_player(s, id, next, at)
     end
   end
 
   defp apply_command({:refill, id}, s) do
-    case player(s, id).refill_at do
-      nil ->
-        {s, :invalid}
-
-      deadline ->
+    case s.players[id] do
+      %{refill_at: deadline} when is_integer(deadline) ->
         if System.system_time(:millisecond) >= deadline,
-          do: save_player(s, id, fresh_player(s.mark)),
+          do: apply_command({:account, id}, s),
           else: {s, :liquidated}
+
+      _ ->
+        {s, :invalid}
     end
   end
 
@@ -324,26 +350,71 @@ defmodule Qiron.Market do
   defp move(s, cents) do
     mark = min(@max_mark, max(@min_mark, cents))
 
-    deadline = System.system_time(:millisecond) + @cooldown_ms
+    next = observe_players(s, mark)
+    record_mark(%{next | previous: s.mark, mark: mark})
+  end
+
+  defp observe_players(s, mark) do
+    at = System.system_time(:millisecond)
 
     players =
       Map.new(s.players, fn {id, p} ->
-        if p.side != "flat" and equity(p, mark) == 0,
-          do: {id, %{p | side: "flat", bank: 0, leverage: 1, refill_at: deadline}},
-          else: {id, p}
+        p =
+          cond do
+            p.refill_at ->
+              refill_when_due(p, mark, at)
+
+            p.side == "flat" ->
+              p
+
+            true ->
+              case equity(p, mark) do
+                0 ->
+                  %{
+                    p
+                    | side: "flat",
+                      bank: 0,
+                      leverage: 1,
+                      refill_at: at + @cooldown_ms,
+                      pnl_runs: PnlHistory.finish(p.pnl_runs, at, -@slug)
+                  }
+
+                amount ->
+                  %{p | pnl_runs: PnlHistory.sample(p.pnl_runs, at, amount - @slug)}
+              end
+          end
+
+        {id, p}
       end)
 
-    record_mark(%{s | previous: s.mark, mark: mark, players: players})
+    %{s | players: players}
   end
 
   defp fresh_player(mark),
     do: %{side: "flat", bank: @slug, entry: mark, leverage: 1, refill_at: nil}
 
-  defp player(s, id), do: Map.get(s.players, id, fresh_player(s.mark))
+  defp refill_when_due(%{refill_at: deadline} = p, mark, at)
+       when is_integer(deadline) and deadline <= at do
+    Map.put(fresh_player(mark), :pnl_runs, PnlHistory.start(p.pnl_runs, deadline, 0))
+  end
 
-  defp save_player(s, id, player) do
-    next = %{s | players: Map.put(s.players, id, player)}
-    {next, account(next, id)}
+  defp refill_when_due(p, _, _), do: p
+
+  defp seat(s, id) do
+    at = System.system_time(:millisecond)
+
+    p =
+      case Map.fetch(s.players, id) do
+        {:ok, existing} -> refill_when_due(existing, s.mark, at)
+        :error -> Map.put(fresh_player(s.mark), :pnl_runs, PnlHistory.start([], at, 0))
+      end
+
+    {%{s | players: Map.put(s.players, id, p)}, p, at}
+  end
+
+  defp save_player(s, id, p, at) do
+    next = %{s | players: Map.put(s.players, id, p)}
+    {next, account(next, id, p, at)}
   end
 
   defp migrate_accounts(s) do
@@ -365,6 +436,28 @@ defmodule Qiron.Market do
           bank = 50 * (old.bank + max(-stake, round(stake * change / old.entry)))
           deadline = if bank == 0, do: System.system_time(:millisecond) + @cooldown_ms
           {id, %{fresh_player(s.mark) | bank: bank, refill_at: deadline}}
+      end)
+
+    at = System.system_time(:millisecond)
+
+    players =
+      Map.new(players, fn {id, p} ->
+        p =
+          if Map.has_key?(p, :pnl_runs) do
+            p
+          else
+            runs =
+              if p.refill_at do
+                ended = p.refill_at - @cooldown_ms
+                [] |> PnlHistory.start(ended, -@slug) |> PnlHistory.finish(ended, -@slug)
+              else
+                PnlHistory.start([], at, equity(p, s.mark) - @slug)
+              end
+
+            Map.put(p, :pnl_runs, runs)
+          end
+
+        {id, refill_when_due(p, s.mark, at)}
       end)
 
     %{s | players: players}
@@ -389,9 +482,7 @@ defmodule Qiron.Market do
     if trigger in @min_mark..@max_mark, do: trigger
   end
 
-  defp account(s, id) do
-    p = player(s, id)
-
+  defp account(s, id, p, at) do
     balance = equity(p, s.mark)
     active = liquidation(p.side, p.entry, p.bank, p.leverage)
 
@@ -409,10 +500,12 @@ defmodule Qiron.Market do
 
     remaining =
       if p.refill_at do
-        div(max(0, p.refill_at - System.system_time(:millisecond)) + 999, 1000)
+        div(max(0, p.refill_at - at) + 999, 1000)
       end
 
     %{
+      pnl_runs: PnlHistory.public(p.pnl_runs),
+      as_of_ms: at,
       side: p.side,
       piss_coin: balance / 100,
       mark_cents: s.mark,
@@ -430,9 +523,18 @@ defmodule Qiron.Market do
   end
 
   defp scene(display, s) do
-    counts = Enum.frequencies_by(Map.values(s.players), & &1.side)
-    up = Map.get(counts, "up", 0)
-    down = Map.get(counts, "down", 0)
+    {up, down, long_oi, short_oi} =
+      Enum.reduce(s.players, {0, 0, 0, 0}, fn
+        {_, %{side: "flat"}}, totals ->
+          totals
+
+        {_, p}, {up, down, long, short} ->
+          notional = div(p.bank * p.leverage * s.mark + div(p.entry, 2), p.entry)
+
+          if p.side == "up",
+            do: {up + 1, down, long + notional, short},
+            else: {up, down + 1, long, short + notional}
+      end)
 
     scene = %{
       mode: display.mode,
@@ -453,13 +555,17 @@ defmodule Qiron.Market do
       change: (s.mark - s.previous) / 100,
       up: up,
       down: down,
+      long_oi_cents: long_oi,
+      short_oi_cents: short_oi,
       held: s.held,
       volatility_bps: s.volatility_bps,
       layers: Display.layers(display)
     }
 
-    if "join" in display.widgets,
-      do: Map.put(scene, :join_banner, Display.join_banner!()),
-      else: scene
+    Enum.reduce(display.widgets, scene, fn
+      "join", scene -> Map.put(scene, :join_banner, Display.join_banner!())
+      "callin", scene -> Map.put(scene, :callin_banner, Display.callin_banner!())
+      _, scene -> scene
+    end)
   end
 end

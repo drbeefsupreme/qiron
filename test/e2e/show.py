@@ -167,8 +167,8 @@ def rehearse(browser, url, password, panel):
         phone.locator("#" + side).click()
         expect(phone.locator("#side")).to_contain_text("Long" if side == "up" else "Short")
     set_price("110")
-    expect(stage.locator("#bulls")).to_have_text("1")
-    expect(stage.locator("#bears")).to_have_text("1")
+    expect(stage.locator("#long-oi")).to_have_text("2,750,000.00")
+    expect(stage.locator("#short-oi")).to_have_text("55,000.00")
     expect(stage.locator("#mark")).to_have_text("110.00")
     chart = request.get(url + "/api/stage").json()["candles"]
     assert chart[-1]["close"] == 11000
@@ -179,6 +179,8 @@ def rehearse(browser, url, password, panel):
             for method, data in panel.frames[start:]), timeout=10)
     for phone, value in zip(audience, ("300,000.00", "45,000.00")):
         expect(phone.locator("#balance")).to_have_text(value)
+        expect(phone.locator("#blood-price")).to_have_text("110.00")
+        expect(phone.locator("#pnl-chart path[data-slug]")).to_have_count(1)
         phone.locator("#close").click()
         expect(phone.locator("#side")).to_contain_text("Flat")
         phone.reload()
@@ -192,7 +194,7 @@ def rehearse(browser, url, password, panel):
     expect(long.locator("#balance")).to_have_text("0.00")
     long.reload()
     expect(long.locator("#cooldown")).to_contain_text("Liquidated")
-    expect(long.locator("#claim")).to_be_disabled()
+    expect(long.locator("#pnl-value")).to_have_text("−50,000.00")
     expect(long.locator("#down")).to_be_disabled()
     assert long.request.post(url + "/api/refill", headers={"x-qiron": "1"}, data={}).status == 409
 
@@ -299,7 +301,7 @@ def rehearse(browser, url, password, panel):
     assert scene["melt"] == 72 and scene["hue"] == 61
     expect(stage.locator("#l1")).to_have_text("OFFSHORE EXCHANGE")
     operator.locator('[data-preset="blood"]').click()
-    expect(operator.locator("#widget-stack li")).to_have_count(2)
+    expect(operator.locator("#widget-stack li")).to_have_count(3)
     operator.locator('[data-preset="gif"]').click()
     expect(operator.locator("#gif-source")).to_have_value("beef")
     expect(operator.locator("#melt")).to_have_value("72")
@@ -327,6 +329,16 @@ def rehearse(browser, url, password, panel):
     expect(stage.locator("#stage-title")).to_have_text("House mix")
     live = request.get(url + "/api/stage").json()
     assert "chyron.local:4000" in live["join_banner"] and live["preset_name"] == "House mix"
+    start = len(panel.frames)
+    operator.locator("#widget-choice").select_option("callin")
+    operator.locator("#add-widget").click()
+    expect(operator.locator("#widget-stack li").last).to_contain_text("Telethon call-in")
+    expect(operator.locator("#take-live")).to_be_enabled()
+    assert "callin" not in request.get(url + "/api/stage").json()["widgets"]
+    operator.keyboard.press("Alt+Enter")
+    panel.expect(42, b"", start)
+    assert request.get(url + "/api/stage").json()["widgets"][-1] == "callin"
+    assert any(method == 41 and data[0] == 44 and data[-1] == 17 for method, data in panel.frames[start:])
 
 
 

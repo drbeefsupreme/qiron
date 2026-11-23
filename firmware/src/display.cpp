@@ -63,12 +63,13 @@ struct Gif {
 DMAMEM films::Player filmPlayer;
 DMAMEM films::Cache filmCaches[5];
 display::Stack stack{7, {0,8,9,10,11,12,13}, 0, 0};
-uint16_t mask = 0x3f01;
-char joinText[241];
+uint32_t mask = 0x3f01;
+char joinText[241], callinText[121];
 uint32_t started[display::widgetCount], lastComposition, lastScroll;
 uint32_t quotes[6];
 bool dirty = true;
 CuePlayback cues;
+compositor::EffectFades fades;
 Gif first;
 DMAMEM Gif second;
 Gif *live = &first, *spare = &second;
@@ -81,6 +82,8 @@ bool taking;
 char exactFile[241], preparedFile[241];
 
 display::Chart chart{};
+display::Market market{};
+bool hasMarket;
 
 
 uint8_t preset = 4;
@@ -309,13 +312,16 @@ void speed(uint8_t layer, uint8_t value) {
 void brightness(uint8_t value) { matrix.setBrightness(value); }
 
 static void activate() {
-    uint16_t next = 0;
+    uint32_t next = 0;
     auto now = millis();
+    constexpr uint32_t tickerMask = (1u << 7) | (1u << 16);
+    uint32_t tickerStart = mask & tickerMask ? started[mask & (1u << 7) ? 7 : 16] : now;
     for (unsigned i=0; i<stack.count; ++i) {
         auto id = stack.ids[i];
         next |= 1u << id;
         if (!(mask & (1u << id))) started[id] = now;
     }
+    if (next & tickerMask) started[7] = started[16] = tickerStart;
     if ((mask & 1) && !(next & 1)) {
         closeGif();
         demoVisible = false;
@@ -325,6 +331,7 @@ static void activate() {
         pixelsTimed = blinking = false;
     }
     mask = next;
+    fades.set(stack.melt, stack.hue, now);
     dirty = true;
 }
 
@@ -336,7 +343,7 @@ void setStack(const Stack& selected) {
 void setMode(Mode next) {
     Stack preset{};
     if (next == Mode::gif) preset = {7, {0,8,9,10,11,12,13}, 0, 0};
-    else if (next == Mode::blood) preset = {2, {1,7}, 0, 0};
+    else if (next == Mode::blood) preset = {3, {1,15,16}, 0, 0};
     else preset = {1, {static_cast<uint8_t>(next)}, 0, 0};
     setStack(preset);
 }
@@ -347,6 +354,12 @@ void setSpliceInterval(uint8_t seconds) { cues.setInterval(seconds, millis()); }
 void setFx(uint8_t melt, uint8_t hue) {
     stack.melt = melt;
     stack.hue = hue;
+    fades.set(melt,hue,millis());
+    dirty = true;
+}
+
+void setCallin(const char* text) {
+    strcpy(callinText,text);
     dirty = true;
 }
 
@@ -360,7 +373,14 @@ void setQuotes(const uint32_t* prices) {
     dirty = true;
 }
 
+void setMarket(const Market& value) {
+    market = value;
+    hasMarket = true;
+    dirty = true;
+}
+
 void setChart(const Chart& value) {
+    if (!hasMarket) market.mark = value.mark;
     chart = value;
     dirty = true;
 }
@@ -548,7 +568,7 @@ void effect(uint8_t method) {
 
 static void compose(uint32_t now) {
     while (background.isSwapPending()) {}
-    compositor::render(background, stack, started, now, sdSurface.backBuffer(), chart, quotes, joinText,
+    compositor::render(background, stack, fades.sample(now), started, now, sdSurface.backBuffer(), chart, market, quotes, joinText, callinText,
                        filmPlayer, filmCaches, [](uint8_t id, rgb24* pixels) {
         if (id == 5 && demoVisible) compositor::drawLine(demo, pixels, 1, 11);
         else if (!hasText[id]) return;
@@ -584,11 +604,11 @@ void tick() {
         }
     }
     if (now - lastComposition >= 33) {
-        bool changed = dirty || stack.melt || stack.hue || cues.needsFrame(now);
+        bool changed = dirty || fades.needsFrame() || cues.needsFrame(now);
         compositor::layers(stack, [&](uint8_t id) {
             if (id >= 2 && id <= 6)
                 changed |= filmCaches[id-2].frame != &films::frameAt(filmsByLayer[id-2], now-started[id]);
-            if (id == 7 || id == 14 || (id >= 8 && id < 14 && (hasText[id-8] || (id == 13 && demoVisible)))) changed = true;
+            if (id == 7 || id == 14 || id == 16 || id == 17 || (id >= 8 && id < 14 && (hasText[id-8] || (id == 13 && demoVisible)))) changed = true;
         });
         if (changed) compose(now);
         else lastComposition = now;

@@ -1,7 +1,7 @@
 "use strict";
 
 const mediaNames = {sd: "SD card GIF", crow: "Dr. Crow", beef: "Dr. Beef Supreme", peter: "Peter Thiel", santa: "Santa Claus", intro: "Telethon intro"};
-const widgetNames = {...mediaNames, chart: "Blood Futures chart", ticker: "Exchange ticker", join: "Audience join banner", line1: "Middle text", line2: "Top text", line3: "Bottom text", line4: "Left text", line5: "Right text", lineF: "Feature text"};
+const widgetNames = {...mediaNames, chart: "Candlesticks", price: "Baby Blood price", interest: "Open interest + ticker", ticker: "Exchange ticker", join: "Audience join banner", callin: "Telethon call-in", line1: "Middle text", line2: "Top text", line3: "Bottom text", line4: "Left text", line5: "Right text", lineF: "Feature text"};
 let cueBusy = false;
 let preview, previewMarket = {}, liveFxBusy = false, lastStack;
 
@@ -87,7 +87,7 @@ function renderMixer() {
     el(key).value = value;
     el(key + "-value").value = value + "%";
   }
-  el("live-fx-status").textContent = "Melt " + draft.live_melt + "% · Hue " + draft.live_hue + "%";
+  el("live-fx-status").textContent = "15s fade · Melt " + draft.live_melt + "% · Hue " + draft.live_hue + "%";
   renderCueControls();
   renderPreview();
 }
@@ -134,6 +134,7 @@ async function sendScreenControl(payload) {
 }
 
 function initMixer() {
+  initPhrasePicker();
   for (const button of document.querySelectorAll("[data-screen-cue]")) {
     button.onclick = () => sendScreenControl({screen_cue: button.dataset.screenCue});
   }
