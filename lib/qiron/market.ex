@@ -188,16 +188,19 @@ defmodule Qiron.Market do
         {s, account(s, id, p, at)}
 
       true ->
-        next = %{
-          p
-          | side: side,
-            entry: s.mark,
-            bank: equity(p, s.mark),
-            leverage: if(side == "flat", do: 1, else: leverage)
-        }
+        position = if side == "flat", do: nil, else: new_position_id()
+        settle_position(s, id, Map.put(p, :position_id, position), side, leverage, at)
+    end
+  end
 
-        next = %{next | pnl_runs: PnlHistory.sample(p.pnl_runs, at, next.bank - @slug)}
-        save_player(s, id, next, at)
+  defp apply_command({:leverage, id, position, leverage}, s)
+       when is_binary(position) and leverage in 1..50 do
+    {s, p, at} = seat(s, id)
+
+    cond do
+      p.side == "flat" or p.position_id != position -> {s, :position_changed}
+      p.leverage == leverage -> {s, account(s, id, p, at)}
+      true -> settle_position(s, id, p, p.side, leverage, at)
     end
   end
 
@@ -412,9 +415,22 @@ defmodule Qiron.Market do
     {%{s | players: Map.put(s.players, id, p)}, p, at}
   end
 
-  defp save_player(s, id, p, at) do
-    next = %{s | players: Map.put(s.players, id, p)}
-    {next, account(next, id, p, at)}
+  defp new_position_id, do: Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
+
+  defp settle_position(s, id, p, side, leverage, at) do
+    bank = equity(p, s.mark)
+
+    next = %{
+      p
+      | side: side,
+        bank: bank,
+        entry: s.mark,
+        leverage: if(side == "flat", do: 1, else: leverage),
+        pnl_runs: PnlHistory.sample(p.pnl_runs, at, bank - @slug)
+    }
+
+    s = %{s | players: Map.put(s.players, id, next)}
+    {s, account(s, id, next, at)}
   end
 
   defp migrate_accounts(s) do
@@ -457,6 +473,9 @@ defmodule Qiron.Market do
             Map.put(p, :pnl_runs, runs)
           end
 
+        p =
+          if p.side == "flat", do: p, else: Map.put_new_lazy(p, :position_id, &new_position_id/0)
+
         {id, refill_when_due(p, s.mark, at)}
       end)
 
@@ -489,10 +508,10 @@ defmodule Qiron.Market do
     quotes =
       for side <- ["up", "down"], into: %{} do
         triggers =
-          cond do
-            p.refill_at -> []
-            p.side == side -> List.duplicate(active, 50)
-            true -> Enum.map(1..50, &liquidation(side, s.mark, balance, &1))
+          for lev <- 1..50, is_nil(p.refill_at) do
+            if {side, lev} == {p.side, p.leverage},
+              do: active,
+              else: liquidation(side, s.mark, balance, lev)
           end
 
         {side, triggers}
@@ -509,6 +528,7 @@ defmodule Qiron.Market do
       side: p.side,
       piss_coin: balance / 100,
       mark_cents: s.mark,
+      position_id: if(p.side != "flat", do: p.position_id),
       entry_cents: if(p.side != "flat", do: p.entry),
       liquidation_cents: active,
       quotes_cents: quotes,

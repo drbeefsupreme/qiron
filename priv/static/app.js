@@ -28,7 +28,8 @@ function signal(online) {
   document.body.classList.toggle("online", online);
   el("signal").textContent = online ? "LIVE FEED" : "RECONNECTING";
 }
-let latestAccount;
+let latestAccount, leverageEdit, queuedResize;
+let resizing = false;
 const sideNames = { flat: "Flat", up: "Long", down: "Short" };
 
 function liquidation(cents) {
@@ -48,13 +49,16 @@ function showQuotes() {
 
 function account(data) {
   latestAccount = data;
+  if (!resizing && !leverageEdit && data.side !== "flat") {
+    el("leverage").value = data.leverage;
+  }
   showQuotes();
   const busted = data.refill_in !== null;
   el("balance").textContent = fmt(data.piss_coin);
   el("blood-price").textContent = fmt(data.mark_cents / 100);
   drawPnl(data);
   el("refill").hidden = !busted;
-  el("leverage").disabled = busted;
+  el("leverage").disabled = busted || (busy && !resizing);
   if (busted) {
     const seconds = data.refill_in;
     el("cooldown").textContent = seconds
@@ -64,9 +68,10 @@ function account(data) {
   }
   el("side").textContent = data.side === "flat" ? "Flat" : sideNames[data.side] + " · " + data.leverage + "×";
   el("active-liq").textContent = data.side === "flat" ? "" : "Liquidation · " + liquidation(data.liquidation_cents);
+  el("close").disabled = busy || resizing;
   el("close").hidden = data.side === "flat";
   for (const side of ["up", "down"]) {
-    el(side).disabled = busy || busted || data.side === side;
+    el(side).disabled = busy || resizing || busted || data.side === side;
     el(side).setAttribute("aria-pressed", String(data.side === side));
   }
 }
@@ -105,6 +110,7 @@ async function command(payload, message, path = view === "audience" ? "trade" : 
   if (busy) return;
   busy = true;
   ++version;
+  if (view === "audience" && latestAccount) account(latestAccount);
   el("error").textContent = "";
   try {
     await api(path, payload);
@@ -118,7 +124,31 @@ async function command(payload, message, path = view === "audience" ? "trade" : 
   }
 }
 if (view === "audience") {
-  el("leverage").oninput = showQuotes;
+  const slider = el("leverage");
+  slider.oninput = () => {
+    leverageEdit ??= latestAccount;
+    showQuotes();
+  };
+  slider.onchange = async () => {
+    const position = leverageEdit ?? latestAccount;
+    leverageEdit = null;
+    if (!position?.position_id) return;
+    queuedResize = {position_id: position.position_id, leverage: Number(slider.value)};
+    if (resizing) return;
+    resizing = true;
+    try {
+      while (queuedResize) {
+        const change = queuedResize;
+        queuedResize = null;
+        if (!await command(change, "Leverage changed to " + change.leverage + "×.", "leverage")) {
+          queuedResize = null;
+        }
+      }
+    } finally {
+      resizing = false;
+      account(latestAccount);
+    }
+  };
   el("pnl-run").onchange = () => { if (latestAccount) drawPnl(latestAccount); };
   for (const side of ["up", "down", "flat"]) {
     el(side === "flat" ? "close" : side).onclick = () =>

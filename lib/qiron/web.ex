@@ -51,6 +51,15 @@ defmodule Qiron.Web do
     )
   end
 
+  post "/api/leverage" do
+    {conn, id} = seat(conn)
+
+    respond(
+      conn,
+      Market.call({:leverage, id, conn.body_params["position_id"], conn.body_params["leverage"]})
+    )
+  end
+
   post "/api/refill" do
     {conn, id} = seat(conn)
     respond(conn, Market.call({:refill, id}))
@@ -209,6 +218,9 @@ defmodule Qiron.Web do
     do: send_resp(conn, 409, "Draft changed. Refresh before taking live.")
 
   defp respond(conn, :not_ready), do: send_resp(conn, 409, "Draft is not ready on the panel.")
+
+  defp respond(conn, :position_changed),
+    do: send_resp(conn, 409, "This position is no longer open.")
 
   defp respond(conn, :liquidated),
     do: send_resp(conn, 409, "Your next slug arrives when the cooldown ends.")

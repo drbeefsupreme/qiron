@@ -35,6 +35,37 @@ defmodule Qiron.MarketTest do
   end
 
   @tag :tmp_dir
+  test "leverage changes resize only the selected open position at the current mark", %{
+    tmp_dir: dir
+  } do
+    opts = [path: Path.join(dir, "show"), tick: false]
+    pid = start_supervised!({Market, opts})
+    call = &Market.call(&1, pid)
+    %{position_id: id} = call.({:trade, "seat", "up", 1})
+    call.({:mark, 11_000})
+    assert :invalid = call.({:leverage, "seat", id, 51})
+
+    assert %{side: "up", leverage: 5, piss_coin: 55_000.0, liquidation_cents: 8800} =
+             call.({:leverage, "seat", id, 5})
+
+    call.({:mark, 12_100})
+    assert %{entry_cents: 11_000, piss_coin: 82_500.0} = call.({:leverage, "seat", id, 5})
+    assert %{long_oi_cents: 30_250_000, up: 1} = call.(:stage)
+    stop_supervised!(Market)
+    pid = start_supervised!({Market, opts})
+    call = &Market.call(&1, pid)
+    assert %{position_id: ^id, leverage: 5} = call.({:account, "seat"})
+    call.({:trade, "seat", "flat", 1})
+    assert :position_changed = call.({:leverage, "seat", id, 10})
+    %{position_id: second} = call.({:trade, "seat", "up", 2})
+    assert second != id
+    assert :position_changed = call.({:leverage, "seat", id, 10})
+    call.({:mark, 100})
+    assert :position_changed = call.({:leverage, "seat", second, 10})
+    assert %{side: "flat", piss_coin: 0.0} = call.({:account, "seat"})
+  end
+
+  @tag :tmp_dir
   test "quoted liquidation matches settlement, side switches, and limits", %{tmp_dir: dir} do
     pid = start_supervised!({Market, path: Path.join(dir, "show"), tick: false})
     call = &Market.call(&1, pid)
@@ -50,7 +81,8 @@ defmodule Qiron.MarketTest do
     call.({:mark, 6667})
     before_switch = call.({:account, "seat"})
     assert before_switch.side == "up"
-    assert Enum.uniq(before_switch.quotes_cents["up"]) == [6666]
+    assert Enum.at(before_switch.quotes_cents["up"], 2) == 6666
+    assert Enum.at(before_switch.quotes_cents["up"], 0) == nil
     next_trigger = Enum.at(before_switch.quotes_cents["down"], 49)
     assert %{liquidation_cents: ^next_trigger} = call.({:trade, "seat", "down", 50})
     call.({:mark, next_trigger - 1})
