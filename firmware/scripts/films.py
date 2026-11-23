@@ -35,9 +35,10 @@ assets = Path(env.subst("$PROJECT_DIR")).parent / "priv/static"
 output = Path(env.subst("$BUILD_DIR")) / "films"
 output.mkdir(parents=True, exist_ok=True)
 lines = ["#pragma once"]
-for name, file, width in [("intro", "telethon.gif", 128), ("crow", "dr-crow.gif", 96),
-                          ("beef", "dr-beef.gif", 96), ("peter", "peter-thiel.gif", 96),
-                          ("santa", "santa.gif", 96)]:
+films = [(2, "intro", "telethon.gif", 128), (3, "crow", "dr-crow.gif", 96),
+         (4, "beef", "dr-beef.gif", 96), (5, "peter", "peter-thiel.gif", 96),
+         (6, "santa", "santa.gif", 96), (18, "snake", "solid-snake.gif", 96)]
+for widget, name, file, width in films:
     gif = (assets / file).read_bytes()
     if gif[:3] != b"GIF" or gif[6:10] != bytes([width, 0, 96, 0]):
         raise ValueError(f"Expected {width}x96 GIF for {file}")
@@ -53,7 +54,14 @@ for name, file, width in [("intro", "telethon.gif", 128), ("crow", "dr-crow.gif"
         lines.append(",".join(map(str, packed[offset:offset + 32])) + ",")
     lines.extend(["};", f"const films::Frame {name}Frames[] PROGMEM = {{", ",".join(table), "};"])
     lines.append(f"constexpr films::Film {name}Film{{{name}Bytes,{name}Frames,{len(table)},{width},{elapsed}}};")
-lines.append("const films::Film filmsByLayer[] = {introFilm,crowFilm,beefFilm,peterFilm,santaFilm};")
+lines.append("constexpr films::Film filmLibrary[] = {" + ",".join(name+"Film" for _,name,_,_ in films) + "};")
+slots = {widget: i for i, (widget, _, _, _) in enumerate(films)}
+lines.append("inline int filmSlot(uint8_t id) {")
+lines.append("    static constexpr int8_t slots[] = {" +
+             ",".join(str(slots.get(widget, -1)) for widget in range(max(slots)+1)) + "};")
+lines.append("    return id < sizeof(slots) ? slots[id] : -1;")
+lines.append("}")
+lines.append(f"constexpr size_t filmPixelCount = {sum(width*96 for _,_,_,width in films)};")
 header = output / "film_assets.h"
 source = "\n".join(lines)
 if not header.exists() or header.read_text() != source:

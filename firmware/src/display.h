@@ -4,7 +4,7 @@
 
 namespace display {
 enum class Mode : uint8_t { gif, blood, intro, crow, beef };
-constexpr uint8_t widgetCount = 18;
+constexpr uint8_t widgetCount = 19;
 struct Stack { uint8_t count, ids[widgetCount], melt, hue; };
 void setJoin(const char* glyphs);
 void setCallin(const char* text);

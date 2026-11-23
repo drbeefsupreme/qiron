@@ -340,6 +340,22 @@ def rehearse(browser, url, password, panel):
     assert request.get(url + "/api/stage").json()["widgets"][-1] == "callin"
     assert any(method == 41 and data[0] == 44 and data[-1] == 17 for method, data in panel.frames[start:])
 
+    operator.locator('[data-preset="gif"]').click()
+    expect(operator.locator("#gif-source")).to_have_value("beef")
+    operator.locator("#gif-source").select_option("snake")
+    expect(operator.locator("#take-live")).to_be_enabled()
+    assert panel_state()["widgets"][0] == "snake"
+    start = len(panel.frames)
+    operator.keyboard.press("Alt+Enter")
+    panel.expect(42, b"", start)
+    expect(stage.locator("#stage-snake")).to_have_text("Solid Snake")
+    expect(stage.locator("#l1")).to_have_text("OFFSHORE EXCHANGE")
+    assert stage.request.get(url + "/solid-snake.gif").body().startswith(b"GIF")
+    operator.get_by_role("button", name="Remove · Solid Snake", exact=True).click()
+    operator.locator("#widget-choice").select_option("snake")
+    operator.locator("#add-widget").click()
+    expect(operator.locator("#widget-stack li").last).to_contain_text("Solid Snake")
+
 
 
 if __name__ == "__main__":

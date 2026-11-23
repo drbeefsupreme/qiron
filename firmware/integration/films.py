@@ -21,8 +21,8 @@ with tempfile.TemporaryDirectory() as directory:
     def draw(ids, times, melt=0, hue=0):
         return subprocess.check_output([renderer, ids, str(melt), str(hue), *map(str, times)])
 
-    names = ["telethon.gif", "dr-crow.gif", "dr-beef.gif", "peter-thiel.gif", "santa.gif"]
-    for id, filename in enumerate(names, 2):
+    names = ["telethon.gif", "dr-crow.gif", "dr-beef.gif", "peter-thiel.gif", "santa.gif", "solid-snake.gif"]
+    for id, filename in zip([2,3,4,5,6,18], names):
         duration = 24000 if id == 2 else 10000
         frames = []
         starts = []
@@ -45,13 +45,21 @@ with tempfile.TemporaryDirectory() as directory:
             assert rgb[i*size:(i+1)*size] == frames[frame], (filename, ms)
         print(f"{filename}: {len(frames)} frames, {elapsed} ms, all pixels matched")
 
-    stack = "0,3,4,5,6"
+    stack = "0,3,4,5,6,18"
     base = Image.new("RGB", (128,96), (14,22,38))
     for filename in names[1:]:
         with Image.open(firmware.parent / "priv/static" / filename) as image:
             portrait = image.convert("RGBA")
             base.paste(portrait,(16,0),portrait)
     assert draw(stack,[0]) == base.tobytes()
+    with Image.open(firmware.parent / "priv/static/solid-snake.gif") as source:
+        snake = source.convert("RGBA")
+        assert snake.size == (96,96) and snake.getchannel("A").getextrema() == (0,255)
+        for below in ["0,8","3,8"]:
+            base = Image.frombytes("RGB",(128,96),draw(below,[0]))
+            base.paste(snake,(16,0),snake)
+            assert draw(below+",18",[0]) == base.tobytes()
+    assert draw("18,8",[0]) != draw("8,18",[0])
     assert draw("3,4",[0]) != draw("4,3",[0])
     graph = Image.frombytes("RGB",(128,96),draw("1",[0]))
     expected = Image.frombytes("RGB",(128,96),draw("3,8",[0]))
@@ -116,8 +124,8 @@ with tempfile.TemporaryDirectory() as directory:
         assert image("3,"+ticker+",17",0).crop(band).tobytes() == call.crop(band).tobytes()
         assert image("3,17,"+ticker,0).crop(band).tobytes() == image(ticker,0).crop(band).tobytes()
     assert image("3,17",0).crop((0,0,128,87)).tobytes() == image("3",0).crop((0,0,128,87)).tobytes()
-    dense = ",".join(map(str,range(18)))
-    assert image(dense,600).crop((0,0,128,9)).tobytes() == image("14,15",600).crop((0,0,128,9)).tobytes()
+    dense = ",".join(map(str,range(19)))
+    assert image(dense,600).crop((0,0,128,9)).tobytes() == image("14,15,18",600).crop((0,0,128,9)).tobytes()
     print("Verified portrait stacks, text order, chart, ticker, join banner clipping and wrap, melt and hue")
     def check_fade(events, start=0):
         script = []
@@ -145,5 +153,5 @@ with tempfile.TemporaryDirectory() as directory:
     check_fade(moves, 0xffffe000)
     print("Verified independent 15-second melt and hue ramps, continuous retargeting, idle restoration and clock wrap")
     if "--bench" in sys.argv:
-        for ids, melt, hue in [("3",0,0),("0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17",100,100)]:
+        for ids, melt, hue in [("3",0,0),("0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18",100,100)]:
             print(ids, draw(ids,["bench"],melt,hue).decode().strip())

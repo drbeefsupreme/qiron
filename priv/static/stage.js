@@ -1,8 +1,8 @@
 "use strict";
 const stageTitles = {gif: "GIF mode", blood: "Blood Futures", intro: "Christmas Telethon",
-  crow: "Dr. Crow", beef: "Dr. Beef Supreme", peter: "Peter Thiel", santa: "Santa"};
+  crow: "Dr. Crow", beef: "Dr. Beef Supreme", peter: "Peter Thiel", santa: "Santa", snake: "Solid Snake"};
 const stageSource = {gif: "sd", blood: "chart", intro: "intro", crow: "crow", beef: "beef",
-  peter: "peter", santa: "santa"};
+  peter: "peter", santa: "santa", snake: "snake"};
 const stageLines = ["line1", "line2", "line3", "line4", "line5", "lineF"];
 const stageCanvas = window.QyronCanvas(document.getElementById("stage-canvas"));
 const stageText = document.querySelector("#stage-scrolls dl");

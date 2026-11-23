@@ -1,6 +1,6 @@
 "use strict";
 
-const mediaNames = {sd: "SD card GIF", crow: "Dr. Crow", beef: "Dr. Beef Supreme", peter: "Peter Thiel", santa: "Santa Claus", intro: "Telethon intro"};
+const mediaNames = {sd: "SD card GIF", crow: "Dr. Crow", beef: "Dr. Beef Supreme", peter: "Peter Thiel", santa: "Santa Claus", snake: "Solid Snake", intro: "Telethon intro"};
 const widgetNames = {...mediaNames, chart: "Candlesticks", price: "Baby Blood price", interest: "Open interest + ticker", ticker: "Exchange ticker", join: "Audience join banner", callin: "Telethon call-in", line1: "Middle text", line2: "Top text", line3: "Bottom text", line4: "Left text", line5: "Right text", lineF: "Feature text"};
 let cueBusy = false;
 let preview, previewMarket = {}, liveFxBusy = false, lastStack;

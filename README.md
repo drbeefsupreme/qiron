@@ -22,7 +22,7 @@ The password prompt above uses zsh. In Bash use `read -rs -p 'Booth password: ' 
 
 The five built-in saved scenes in the booth’s left sidebar include the ten-second **Dr. Crow** and **Dr. Beef Supreme** portraits. Click a scene or use the up/down arrows with the list focused to load its draft into the preview. Changes to that scene are remembered. **Save as** creates a separate named copy. **Take live** or **Alt+Enter** puts the selected draft on air. Brightness is at the bottom of the booth.
 
-The 24-second Introduction places Crow, Beef, Peter Thiel and Santa against the poster’s ochre jungle and falling petals. The CAW-IN and Santa Tracker sequences return to an ensemble Christmas Telethon title. The Teensy plays the intro and all four portraits directly from flash. The browser stage uses the same GIFs. To regenerate the intro from its source art, run `python3 art/telethon.py` with Pillow installed before building the firmware.
+The 24-second Introduction places Crow, Beef, Peter Thiel and Santa against the poster’s ochre jungle and falling petals. The CAW-IN and Santa Tracker sequences return to an ensemble Christmas Telethon title. The Teensy plays the intro and the cast portraits and Solid Snake directly from flash. The browser stage uses the same GIFs. To regenerate the intro from its source art, run `python3 art/telethon.py` with Pillow installed before building the firmware.
 
 The **Scroll phrase library** searches full phrases and their titles. Choose a scroll or press **Random phrase + spot** to place one in the draft. Take the scene to put it on air. Each scroll accepts 32,767 UTF-8 bytes. The Pi launcher reads a personal catalog from `~/.config/qiron/phrases.json`, falling back to the bundled starter cues. The file is a JSON array of objects with `title` and `text` strings.
 
@@ -52,7 +52,7 @@ The controller opens `/dev/ttyACM0`. To select a stable device name, set `QYRON_
 
 ## Mix widgets and melt the screen
 
-Choose a mode in the booth to recall its widget stack. The list runs from back to front. Use **Add to front**, the arrows, and **×** to build the stack. Each widget can appear once. The four portraits have transparent backgrounds. The chart draws only its grid and candles, leaving GIFs and other lower layers visible. The intro and SD footage fill the entire screen. In GIF mode, **GIF mode background** swaps the back layer while keeping your text and ticker in front. Select an active scroll under **Scrolling layers** to set its message and speed.
+Choose a mode in the booth to recall its widget stack. The list runs from back to front. Use **Add to front**, the arrows, and **×** to build the stack. Each widget can appear once. The portraits have transparent backgrounds. Select **Solid Snake** as the GIF mode background to place text over his ten-second idle, or add him to any scene using the widget picker. The chart draws only its grid and candles, leaving GIFs and other lower layers visible. The intro and SD footage fill the entire screen. In GIF mode, **GIF mode background** swaps the back layer while keeping your text and ticker in front. Select an active scroll under **Scrolling layers** to set its message and speed.
 
 The Blood Futures scene starts with candlesticks, a top-left Baby Blood price, and a bottom strip showing long and short open interest above the rightward ticker. Open interest uses each open position’s leveraged size at the current mark. You can add the ticker to any mode. PISSCOIN, PRICECOIN, BONER, FARTCOIN, ROGUE and CROW each have a fixed color and a simulated price. Their quotes move independently of the audience market.
 
@@ -107,7 +107,7 @@ The Pi and Teensy use one framed binary protocol over USB serial. Flash the new 
 | 41 | Preload a field | One-byte field method followed by its normal payload |
 | 42 | Take the prepared scene | Empty |
 | 43 | Update ticker prices | Six little-endian uint32 prices in cents, in the ticker order above |
-| 44 | Set widget stack | Melt and hue bytes (0–100), followed by 0–18 distinct widget IDs in back-to-front order |
+| 44 | Set widget stack | Melt and hue bytes (0–100), followed by 0–19 distinct widget IDs in back-to-front order |
 | 45 | Set live effects | Melt and hue bytes (0–100) |
 | 46 | Play a one-shot on the live screen | Type byte (1 = crack, 2 = stars) followed by a little-endian uint32 seed |
 | 47 | Set live photo splice interval | One byte, 0, 5 or 60 seconds |
@@ -115,7 +115,7 @@ The Pi and Teensy use one framed binary protocol over USB serial. Flash the new 
 | 49 | Price and open interest | Little-endian uint32 mark in cents, then uint64 long and short notional in cents |
 | 50 | Set call-in banner text | 1–120 printable ASCII bytes |
 
-Widget IDs 0–7 are SD, chart, intro, Crow, Beef, Peter, Santa and ticker. IDs 8–13 select scrolls 1–5 and F. IDs 15 and 16 enable the price and open-interest widgets and use field 49. Open interest also uses ticker field 43. ID 17 displays the venue’s call-in number and requires field 50. ID 14 enables the join banner and requires field 48 in its prepared scene. Preload the stack as the first field of a custom scene, then send its required data and take. Live quote and FX updates can run while another scene is staged.
+Widget IDs 0–7 are SD, chart, intro, Crow, Beef, Peter, Santa and ticker. IDs 8–13 select scrolls 1–5 and F. IDs 15 and 16 enable the price and open-interest widgets and use field 49. Open interest also uses ticker field 43. ID 18 selects Solid Snake. ID 17 displays the venue’s call-in number and requires field 50. ID 14 enables the join banner and requires field 48 in its prepared scene. Preload the stack as the first field of a custom scene, then send its required data and take. Live quote and FX updates can run while another scene is staged.
 
 `GET /api/stage` exposes the on-air display, current mark, long/short notional, open counts and candles. The authenticated `GET /api/panel` exposes the draft, its revision, the on-air mode and preload status. A booth edit posts to `/api/operator`; a take posts `{"take": revision}` to that endpoint. A stale revision returns HTTP 409.
 

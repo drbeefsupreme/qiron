@@ -61,7 +61,7 @@ struct Gif {
     File file;
 };
 DMAMEM films::Player filmPlayer;
-DMAMEM films::Cache filmCaches[5];
+DMAMEM compositor::FilmCaches filmCaches;
 display::Stack stack{7, {0,8,9,10,11,12,13}, 0, 0};
 uint32_t mask = 0x3f01;
 char joinText[241], callinText[121];
@@ -258,6 +258,7 @@ void drawPixels(uint32_t elapsed) {
 namespace display {
 
 void begin() {
+    filmCaches.begin();
     matrix.addLayer(&background);
     sdSurface.begin();
     sdSurface.setRotation(rotation0);
@@ -606,8 +607,9 @@ void tick() {
     if (now - lastComposition >= 33) {
         bool changed = dirty || fades.needsFrame() || cues.needsFrame(now);
         compositor::layers(stack, [&](uint8_t id) {
-            if (id >= 2 && id <= 6)
-                changed |= filmCaches[id-2].frame != &films::frameAt(filmsByLayer[id-2], now-started[id]);
+            int slot = filmSlot(id);
+            if (slot >= 0)
+                changed |= filmCaches.entries[slot].frame != &films::frameAt(filmLibrary[slot], now-started[id]);
             if (id == 7 || id == 14 || id == 16 || id == 17 || (id >= 8 && id < 14 && (hasText[id-8] || (id == 13 && demoVisible)))) changed = true;
         });
         if (changed) compose(now);

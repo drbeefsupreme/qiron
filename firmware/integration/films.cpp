@@ -25,7 +25,8 @@ int main(int argc, char** argv) {
     line.setOffsetFromTop(44);
     line.setSpeed(0);
     line.start("CROW LIVE", -1);
-    static films::Cache caches[5];
+    static compositor::FilmCaches caches;
+    caches.begin();
     films::Player player;
     uint32_t started[display::widgetCount]{}, quotes[]{12345,6543,300,999,9000,12200};
     display::Chart chart{11000,13,7,{{9000,11000,6700,10500}},1};

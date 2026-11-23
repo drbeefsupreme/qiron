@@ -13,7 +13,7 @@ struct Film {
 
 struct Cache {
     const Frame* frame;
-    uint8_t indices[128 * 96];
+    uint8_t* indices;
     uint8_t palette[256][3];
     int transparent;
 };

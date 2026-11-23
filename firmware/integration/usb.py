@@ -110,9 +110,9 @@ with tempfile.TemporaryDirectory() as work:
                 send(43, quotes)
                 send(43, quotes[:-1], False)
                 send(43, quotes + b"x", False)
-                send(44, bytes([0, 100, *range(18)]))
-                for layout in ([0], [0, 0, 18], [0, 0, 5, 5], [101, 0], [0, 101],
-                               [0, 0, *range(19)]):
+                send(44, bytes([0, 100, *range(19)]))
+                for layout in ([0], [0, 0, 19], [0, 0, 5, 5], [101, 0], [0, 101],
+                               [0, 0, *range(20)]):
                     send(44, bytes(layout), False)
                 send(45, bytes([101, 0]), False)
                 send(45, bytes([0, 101]), False)
@@ -180,7 +180,7 @@ with tempfile.TemporaryDirectory() as work:
             b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake",
             b"prepare preset 1", b"beginTake", b"mode 0", b"source 1  0", b"effect 21", b"endTake",
             b"join 240", b"join 2", b"beginTake", b"mode 1", b"stack 0 0 1 14", b"chart 12300 92 4 1 12300", b"join 6", b"endTake",
-            b"quotes 0 5 48 7816 255 4294967295", b"stack 0 100 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17",
+            b"quotes 0 5 48 7816 255 4294967295", b"stack 0 100 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18",
             b"beginTake", b"mode 1", b"stack 0 100", b"endTake",
             b"beginTake", b"mode 1", b"stack 0 0 15", b"market 14550 5000000 18446744073709551615", b"endTake",
             b"quotes 0 0 0 0 0 0", b"fx 100 0", b"burst 1 2271560481", b"splice 60", b"burst 2 0", b"splice 5", b"splice 0", b"beginTake", b"mode 4",

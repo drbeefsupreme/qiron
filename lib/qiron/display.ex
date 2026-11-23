@@ -1,5 +1,5 @@
 defmodule Qiron.Display do
-  @ids ~w(sd chart intro crow beef peter santa ticker line1 line2 line3 line4 line5 lineF join price interest callin)
+  @ids ~w(sd chart intro crow beef peter santa ticker line1 line2 line3 line4 line5 lineF join price interest callin snake)
        |> Enum.with_index()
        |> Map.new()
   @gif_widgets ~w(sd line1 line2 line3 line4 line5 lineF)

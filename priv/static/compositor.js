@@ -3,7 +3,7 @@
   const width = 128, height = 96;
   const films = {
     intro: "/telethon.gif", crow: "/dr-crow.gif", beef: "/dr-beef.gif",
-    peter: "/peter-thiel.gif", santa: "/santa.gif",
+    peter: "/peter-thiel.gif", santa: "/santa.gif", snake: "/solid-snake.gif",
   };
   const cache = new Map();
   const lineIds = ["line1", "line2", "line3", "line4", "line5", "lineF"];

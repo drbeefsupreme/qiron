@@ -8,7 +8,7 @@ defmodule Qiron.Web do
     at: "/",
     from: {:qiron, "priv/static"},
     only:
-      ~w(style.css compositor.css stage.css screen-cues.js phrase-picker.js splice-jfk.png splice-911.png mixer.js compositor.js exchange.css pnl.js app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif peter-thiel.gif santa.gif archivo-black.ttf barlow-condensed.ttf)
+      ~w(style.css compositor.css stage.css screen-cues.js phrase-picker.js splice-jfk.png splice-911.png mixer.js compositor.js exchange.css pnl.js app.js booth.js stage.js telethon.gif dr-crow.gif dr-beef.gif peter-thiel.gif santa.gif solid-snake.gif archivo-black.ttf barlow-condensed.ttf)
   )
 
   plug(:match)
